@@ -90,6 +90,9 @@ export default function CRM() {
   const [aiInsight, setAiInsight] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [loginEmail, setLoginEmail] = useState("admin@company.com");
+  const [loginPassword, setLoginPassword] = useState("admin123");
+
   const [boardPosts, setBoardPosts] = useState([
     { id: 1, author: "Maria Santos", avatar: "MS", category: "Idea", title: "Weekly team huddle", body: "Can we set a fixed 15-min standup every Monday morning? Would help us sync before the week starts! 🙌", date: "2026-05-17", pinned: true, reactions: { "👍": ["James Reyes", "Ana Cruz"], "❤️": ["Carlo Lim"], "🔥": [] }, comments: [{ author: "James Reyes", avatar: "JR", text: "Totally agree, I've been wanting this too!", date: "2026-05-17" }] },
     { id: 2, author: "Carlo Lim", avatar: "CL", category: "Question", title: "Leave filing process?", body: "Hey team, where do we file our leave requests? Is there a form or do we just message the admin directly?", date: "2026-05-16", pinned: false, reactions: { "👍": ["Ana Cruz"], "❤️": [], "🔥": [] }, comments: [{ author: "Admin User", avatar: "AD", text: "Hi Carlo! Just message me directly for now. We're working on a formal form.", date: "2026-05-16" }] },
@@ -204,8 +207,6 @@ Give a short (3-4 sentences) performance insight and 2 actionable recommendation
 
   // ---- LOGIN ----
   if (view === "login") {
-    const [email, setEmail] = useState("admin@company.com");
-    const [password, setPassword] = useState("admin123");
     return (
       <div style={{ ...s.app, alignItems: "center", justifyContent: "center", background: "radial-gradient(ellipse at 60% 40%, #1e2f50 0%, #0f1117 70%)" }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -217,13 +218,13 @@ Give a short (3-4 sentences) performance insight and 2 actionable recommendation
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={s.label}>Email</label>
-            <input style={s.input} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" />
+            <input style={s.input} value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@company.com" />
           </div>
           <div style={{ marginBottom: 24 }}>
             <label style={s.label}>Password</label>
-            <input style={s.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+            <input style={s.input} type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="••••••••" />
           </div>
-          <button style={{ ...s.btn("primary"), width: "100%", padding: "12px", fontSize: 14 }} onClick={() => handleLogin(email, password)}>Sign In</button>
+          <button style={{ ...s.btn("primary"), width: "100%", padding: "12px", fontSize: 14 }} onClick={() => handleLogin(loginEmail, loginPassword)}>Sign In</button>
           <div style={{ marginTop: 20, fontSize: 12, color: "#4b5a78", textAlign: "center" }}>
             <b style={{ color: "#6b80a0" }}>Admin:</b> admin@company.com / admin123<br />
             <b style={{ color: "#6b80a0" }}>Agent:</b> maria@company.com / agent123
