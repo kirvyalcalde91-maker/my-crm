@@ -105,8 +105,8 @@ const s = {
 // ============================================================
 
 function LoginPage({ onLogin }) {
-  const [email, setEmail] = useState("admin@nyxvasolutions.com");
-  const [password, setPassword] = useState("nyxvasolutions2026");
+  const [email, setEmail] = useState("admin@company.com");
+  const [password, setPassword] = useState("admin123");
   return (
     <div style={{ ...s.app, alignItems: "center", justifyContent: "center", background: "radial-gradient(ellipse at 60% 40%, #1e2f50 0%, #0f1117 70%)" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
