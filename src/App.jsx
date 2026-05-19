@@ -1,11 +1,5 @@
 import { useState, useEffect } from "react";
 
-// ── Persistent storage using localStorage ──────────────────
-const storage = {
-  get: (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
-  set: (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} },
-};
-
 const initialUsers = [
   { id: 1, name: "Admin User", email: "admin@company.com", password: "admin123", role: "admin", avatar: "AD", department: "Management", target: 0, status: "active", joined: "2026-01-01" },
   { id: 2, name: "Maria Santos", email: "maria@company.com", password: "agent123", role: "agent", avatar: "MS", department: "Sales", target: 50, status: "active", joined: "2026-01-15" },
@@ -33,10 +27,14 @@ const initialAttendance = {
 
 const initialPerformance = { 2: { calls: 38, deals: 5, revenue: 34000, tasks: 22 }, 3: { calls: 29, deals: 3, revenue: 18500, tasks: 18 }, 4: { calls: 42, deals: 6, revenue: 41000, tasks: 25 }, 5: { calls: 21, deals: 2, revenue: 10000, tasks: 15 } };
 
-const initialBoardPosts = [
-  { id: 1, author: "Maria Santos", avatar: "MS", category: "Idea", title: "Weekly team huddle", body: "Can we set a fixed 15-min standup every Monday morning?", date: "2026-05-17", pinned: true, reactions: { "👍": ["James Reyes", "Ana Cruz"], "❤️": ["Carlo Lim"], "🔥": [] }, comments: [{ author: "James Reyes", avatar: "JR", text: "Totally agree!", date: "2026-05-17" }] },
-  { id: 2, author: "Carlo Lim", avatar: "CL", category: "Question", title: "Leave filing process?", body: "Where do we file our leave requests?", date: "2026-05-16", pinned: false, reactions: { "👍": ["Ana Cruz"], "❤️": [], "🔥": [] }, comments: [{ author: "Admin User", avatar: "AD", text: "Message me directly for now!", date: "2026-05-16" }] },
-  { id: 3, author: "Ana Cruz", avatar: "AC", category: "Shoutout", title: "Big thanks to Maria!", body: "Shoutout to Maria for closing the Nova Solutions deal!", date: "2026-05-15", pinned: false, reactions: { "👍": ["Carlo Lim", "James Reyes"], "❤️": ["Admin User"], "🔥": ["James Reyes"] }, comments: [] },
+const initialTrendData = [
+  { day: "Mon", revenue: 8000, deals: 1, calls: 18 },
+  { day: "Tue", revenue: 12500, deals: 2, calls: 22 },
+  { day: "Wed", revenue: 7000, deals: 1, calls: 15 },
+  { day: "Thu", revenue: 18000, deals: 3, calls: 28 },
+  { day: "Fri", revenue: 22000, deals: 4, calls: 31 },
+  { day: "Sat", revenue: 9500, deals: 1, calls: 14 },
+  { day: "Today", revenue: 27000, deals: 4, calls: 35 },
 ];
 
 const statusColors = { "New": "#3b82f6", "Follow-up": "#f59e0b", "Negotiation": "#8b5cf6", "Closed Won": "#10b981", "Closed Lost": "#ef4444" };
@@ -70,7 +68,7 @@ const s = {
 
 // ── Auth Pages ─────────────────────────────────────────────
 function AuthPage({ users, setUsers, onLogin }) {
-  const [mode, setMode] = useState("login"); // login | signup | forgot
+  const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", department: "Sales", role: "agent" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -92,9 +90,7 @@ function AuthPage({ users, setUsers, onLogin }) {
     if (users.find(u => u.email.toLowerCase() === form.email.toLowerCase())) return setError("An account with this email already exists.");
     const initials = form.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
     const newUser = { id: Date.now(), name: form.name, email: form.email, password: form.password, role: "agent", avatar: initials, department: form.department, target: 40, status: "active", joined: today };
-    const updated = [...users, newUser];
-    setUsers(updated);
-    storage.set("crm_users", updated);
+    setUsers(prev => [...prev, newUser]);
     setSuccess("Account created! You can now sign in.");
     setMode("login");
     setForm(p => ({ ...p, password: "", confirm: "" }));
@@ -168,6 +164,12 @@ function AuthPage({ users, setUsers, onLogin }) {
           </>}
           {mode !== "login" && <span style={{ color: "#3b82f6", cursor: "pointer" }} onClick={() => { setMode("login"); setError(""); setSuccess(""); }}>← Back to sign in</span>}
         </div>
+
+        <div style={{ marginTop: 20, padding: "12px 14px", background: "#0f1117", borderRadius: 8, fontSize: 11, color: "#4b5a78" }}>
+          <div style={{ fontWeight: 700, color: "#8899b4", marginBottom: 4 }}>Demo credentials:</div>
+          <div>Admin: admin@company.com / admin123</div>
+          <div>Agent: maria@company.com / agent123</div>
+        </div>
       </div>
     </div>
   );
@@ -183,28 +185,26 @@ function UserManagement({ users, setUsers, currentUser }) {
   const [msg, setMsg] = useState("");
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const save = (updated) => { setUsers(updated); storage.set("crm_users", updated); };
-
   const handleAdd = () => {
     if (!form.name || !form.email || !form.password) return setMsg("Please fill all fields.");
     if (users.find(u => u.email.toLowerCase() === form.email.toLowerCase())) return setMsg("Email already exists.");
     const initials = form.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    save([...users, { id: Date.now(), ...form, avatar: initials, status: "active", joined: today }]);
+    setUsers(prev => [...prev, { id: Date.now(), ...form, avatar: initials, status: "active", joined: today }]);
     setAddOpen(false); setForm({ name: "", email: "", password: "", role: "agent", department: "Sales", target: 40 }); setMsg("");
   };
 
   const handleEdit = () => {
     if (!editUser.name || !editUser.email) return;
     const initials = editUser.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    save(users.map(u => u.id === editUser.id ? { ...editUser, avatar: initials } : u));
+    setUsers(prev => prev.map(u => u.id === editUser.id ? { ...editUser, avatar: initials } : u));
     setEditUser(null);
   };
 
-  const handleToggle = (id) => save(users.map(u => u.id === id ? { ...u, status: u.status === "active" ? "inactive" : "active" } : u));
-  const handleDelete = (id) => { if (id === currentUser.id) return; save(users.filter(u => u.id !== id)); };
+  const handleToggle = (id) => setUsers(prev => prev.map(u => u.id === id ? { ...u, status: u.status === "active" ? "inactive" : "active" } : u));
+  const handleDelete = (id) => { if (id === currentUser.id) return; setUsers(prev => prev.filter(u => u.id !== id)); };
   const handleResetPassword = () => {
     if (!newPassword || newPassword.length < 6) return;
-    save(users.map(u => u.id === resetUser.id ? { ...u, password: newPassword } : u));
+    setUsers(prev => prev.map(u => u.id === resetUser.id ? { ...u, password: newPassword } : u));
     setResetUser(null); setNewPassword("");
   };
 
@@ -256,7 +256,6 @@ function UserManagement({ users, setUsers, currentUser }) {
         </div>
       ))}
 
-      {/* Add User Modal */}
       {addOpen && (
         <div style={s.modal} onClick={() => setAddOpen(false)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
@@ -290,7 +289,6 @@ function UserManagement({ users, setUsers, currentUser }) {
         </div>
       )}
 
-      {/* Edit User Modal */}
       {editUser && (
         <div style={s.modal} onClick={() => setEditUser(null)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
@@ -323,7 +321,6 @@ function UserManagement({ users, setUsers, currentUser }) {
         </div>
       )}
 
-      {/* Reset Password Modal */}
       {resetUser && (
         <div style={s.modal} onClick={() => setResetUser(null)}>
           <div style={{ ...s.modalBox, width: 380 }} onClick={e => e.stopPropagation()}>
@@ -345,16 +342,47 @@ function UserManagement({ users, setUsers, currentUser }) {
 }
 
 // ── Profile / Settings ─────────────────────────────────────
+const presetAvatars = ["🧑‍💼","👩‍💼","🧑‍💻","👩‍💻","🧑‍🎯","👨‍🎤","👩‍🎤","🦸","🦸‍♀️","🧑‍🚀","👨‍🏫","👩‍🏫","🧑‍🔬","👨‍🍳","👩‍🍳","🐯","🦊","🐼","🦁","🐸"];
+
+function ProfilePic({ user, size = 80 }) {
+  if (user.photo) return <img src={user.photo} alt="avatar" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
+  if (user.preset) return <div style={{ width: size, height: size, borderRadius: "50%", background: "#1e2535", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.45, flexShrink: 0 }}>{user.preset}</div>;
+  return <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{user.avatar}</div>;
+}
+
 function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
-  const [form, setForm] = useState({ name: currentUser.name, email: currentUser.email, department: currentUser.department });
+  const me = users.find(u => u.id === currentUser.id) || currentUser;
+  const [form, setForm] = useState({ name: me.name, email: me.email, department: me.department });
   const [pwForm, setPwForm] = useState({ current: "", newPw: "", confirm: "" });
   const [msg, setMsg] = useState({ profile: "", pw: "" });
+  const [showPresets, setShowPresets] = useState(false);
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handlePhoto = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) return setMsg(p => ({ ...p, profile: "Photo must be under 2MB." }));
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, photo: ev.target.result, preset: null } : u));
+      setMsg(p => ({ ...p, profile: "✅ Photo updated!" }));
+      setTimeout(() => setMsg(p => ({ ...p, profile: "" })), 3000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePreset = (emoji) => {
+    setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, preset: emoji, photo: null } : u));
+    setShowPresets(false);
+    setMsg(p => ({ ...p, profile: "✅ Avatar updated!" }));
+    setTimeout(() => setMsg(p => ({ ...p, profile: "" })), 3000);
+  };
+
+  const removePhoto = () => setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, photo: null, preset: null } : u));
 
   const saveProfile = () => {
     const initials = form.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    const updated = users.map(u => u.id === currentUser.id ? { ...u, ...form, avatar: initials } : u);
-    setUsers(updated); storage.set("crm_users", updated);
+    setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...form, avatar: initials } : u));
     setMsg(p => ({ ...p, profile: "✅ Profile updated!" }));
     setTimeout(() => setMsg(p => ({ ...p, profile: "" })), 3000);
   };
@@ -364,27 +392,50 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
     if (pwForm.current !== user.password) return setMsg(p => ({ ...p, pw: "Current password is incorrect." }));
     if (pwForm.newPw.length < 6) return setMsg(p => ({ ...p, pw: "New password must be at least 6 characters." }));
     if (pwForm.newPw !== pwForm.confirm) return setMsg(p => ({ ...p, pw: "Passwords do not match." }));
-    const updated = users.map(u => u.id === currentUser.id ? { ...u, password: pwForm.newPw } : u);
-    setUsers(updated); storage.set("crm_users", updated);
+    setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, password: pwForm.newPw } : u));
     setPwForm({ current: "", newPw: "", confirm: "" });
-    setMsg(p => ({ ...p, pw: "✅ Password changed successfully!" }));
+    setMsg(p => ({ ...p, pw: "✅ Password changed!" }));
     setTimeout(() => setMsg(p => ({ ...p, pw: "" })), 3000);
   };
 
   return (
     <div style={{ maxWidth: 560 }}>
-      <div style={{ ...s.card, display: "flex", gap: 16, alignItems: "center", marginBottom: 24 }}>
-        <div style={s.avatar(64)}>{currentUser.avatar}</div>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>{currentUser.name}</div>
-          <div style={{ fontSize: 13, color: "#4b5a78" }}>{currentUser.email}</div>
-          <span style={s.badge(currentUser.role === "admin" ? "#f59e0b" : "#3b82f6")}>{currentUser.role === "admin" ? "👑 Admin" : "👤 Agent"}</span>
+      <div style={{ ...s.card, display: "flex", gap: 20, alignItems: "center", marginBottom: 24 }}>
+        <div style={{ position: "relative" }}>
+          <ProfilePic user={me} size={80} />
+          {(me.photo || me.preset) && (
+            <button onClick={removePhoto} title="Remove photo" style={{ position: "absolute", top: -4, right: -4, background: "#ef4444", border: "none", borderRadius: "50%", width: 20, height: 20, color: "#fff", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          )}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>{me.name}</div>
+          <div style={{ fontSize: 13, color: "#4b5a78" }}>{me.email}</div>
+          <span style={s.badge(me.role === "admin" ? "#f59e0b" : "#3b82f6")}>{me.role === "admin" ? "👑 Admin" : "👤 Agent"}</span>
         </div>
       </div>
 
       <div style={s.card}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 16 }}>🖼️ Profile Picture</div>
+        {msg.profile && <div style={{ background: msg.profile.startsWith("✅") ? "#10b98122" : "#ef444422", border: `1px solid ${msg.profile.startsWith("✅") ? "#10b981" : "#ef4444"}`, borderRadius: 8, padding: "10px", marginBottom: 14, fontSize: 12, color: msg.profile.startsWith("✅") ? "#10b981" : "#ef4444" }}>{msg.profile}</div>}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <label style={{ ...s.btn("primary"), cursor: "pointer", display: "inline-block" }}>
+            📷 Upload Photo
+            <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: "none" }} />
+          </label>
+          <button style={s.btn("secondary")} onClick={() => setShowPresets(!showPresets)}>😀 Choose Avatar</button>
+        </div>
+        {showPresets && (
+          <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {presetAvatars.map(emoji => (
+              <button key={emoji} onClick={() => handlePreset(emoji)} style={{ width: 48, height: 48, borderRadius: 12, border: me.preset === emoji ? "2px solid #3b82f6" : "2px solid #1e2535", background: "#0f1117", fontSize: 26, cursor: "pointer" }}>{emoji}</button>
+            ))}
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: "#4b5a78", marginTop: 12 }}>Supported: JPG, PNG, GIF · Max 2MB</div>
+      </div>
+
+      <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 18 }}>Edit Profile</div>
-        {msg.profile && <div style={{ background: "#10b98122", border: "1px solid #10b981", borderRadius: 8, padding: "10px", marginBottom: 14, fontSize: 12, color: "#10b981" }}>{msg.profile}</div>}
         {[["Full Name", "name", "text"], ["Email", "email", "email"]].map(([label, key, type]) => (
           <div key={key} style={{ marginBottom: 14 }}><label style={s.label}>{label}</label><input style={s.input} type={type} value={form[key]} onChange={e => f(key, e.target.value)} /></div>
         ))}
@@ -408,9 +459,506 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
 
       <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Account</div>
-        <div style={{ fontSize: 13, color: "#4b5a78", marginBottom: 16 }}>Signed in as {currentUser.email}</div>
+        <div style={{ fontSize: 13, color: "#4b5a78", marginBottom: 16 }}>Signed in as {me.email}</div>
         <button style={s.btn("danger")} onClick={onLogout}>Sign Out</button>
       </div>
+    </div>
+  );
+}
+
+// ── Scripts Library ────────────────────────────────────────
+const initialScripts = [
+  { id: 1, category: "Call Script", title: "Cold Call Opening", content: `Hi, is this [Client Name]? Great!\n\nMy name is [Your Name] from [Company]. I'm reaching out because we've been helping businesses like yours [achieve X result].\n\nI know your time is valuable, so I'll keep this brief — do you have about 2 minutes?\n\n[If yes] Fantastic! So the reason I'm calling is...`, tags: ["cold call", "opening"], createdBy: "Admin User", date: "2026-05-01" },
+  { id: 2, category: "Objection Handler", title: "\"I'm not interested\"", content: `Totally understand, and I appreciate your honesty!\n\nMay I ask — is it because:\na) You already have a solution in place?\nb) The timing isn't right?\nc) Or it's something else entirely?\n\n[Listen carefully]\n\nThe reason I ask is that most of our clients said the same thing before they saw how we [specific benefit]. Would it be okay if I sent you a quick overview just so you have it on file?`, tags: ["objection", "not interested"], createdBy: "Admin User", date: "2026-05-01" },
+  { id: 3, category: "Call Script", title: "Follow-up Call", content: `Hi [Client Name], this is [Your Name] from [Company].\n\nI'm following up on our conversation last [day/week] about [topic].\n\nI wanted to check in — have you had a chance to look over the proposal I sent?\n\n[If yes] Great! Do you have any questions I can help clarify?\n[If no] No worries at all! Would it help if I walked you through the key points quickly right now?`, tags: ["follow-up", "call"], createdBy: "Admin User", date: "2026-05-05" },
+  { id: 4, category: "Objection Handler", title: "\"It's too expensive\"", content: `I completely understand — budget is always a consideration.\n\nCan I ask what you were expecting in terms of investment?\n\n[Listen]\n\nHere's what I'd like you to consider: our clients typically see [X return] within [timeframe]. So rather than a cost, many see it as an investment that pays for itself.\n\nWould it help if we looked at a smaller package to get started?`, tags: ["objection", "price"], createdBy: "Admin User", date: "2026-05-05" },
+  { id: 5, category: "Onboarding", title: "New Client Welcome Script", content: `Welcome to [Company], [Client Name]! We're so excited to have you on board.\n\nHere's what happens next:\n1. You'll receive a welcome email with your login details within 24 hours\n2. Your dedicated account manager [Name] will reach out within 2 business days\n3. We'll schedule your onboarding call to walk you through everything\n\nIn the meantime, do you have any questions I can answer right now?`, tags: ["onboarding", "welcome"], createdBy: "Admin User", date: "2026-05-10" },
+  { id: 6, category: "Onboarding", title: "Product Demo Script", content: `Thanks for joining today's demo, [Client Name]!\n\nBefore I dive in, I'd love to understand your current situation better:\n- What's your biggest challenge with [problem area] right now?\n- What does success look like for you in the next 6 months?\n\n[Listen and take notes]\n\nPerfect. Let me show you exactly how we address those pain points...\n\n[Tailor demo to their answers]`, tags: ["demo", "onboarding"], createdBy: "Admin User", date: "2026-05-12" },
+];
+
+function ScriptsLibrary({ scripts, setScripts, isAdmin }) {
+  const [filterCat, setFilterCat] = useState("All");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editScript, setEditScript] = useState(null);
+  const [form, setForm] = useState({ title: "", category: "Call Script", content: "", tags: "" });
+  const categories = ["All", "Call Script", "Objection Handler", "Onboarding"];
+  const catColors2 = { "Call Script": "#3b82f6", "Objection Handler": "#ef4444", "Onboarding": "#10b981" };
+  const catIcons2 = { "Call Script": "📞", "Objection Handler": "🛡️", "Onboarding": "🎓" };
+
+  const filtered = scripts
+    .filter(sc => filterCat === "All" || sc.category === filterCat)
+    .filter(sc => !search || sc.title.toLowerCase().includes(search.toLowerCase()) || sc.content.toLowerCase().includes(search.toLowerCase()) || sc.tags.some(t => t.includes(search.toLowerCase())));
+
+  const saveScript = () => {
+    if (!form.title || !form.content) return;
+    const tags = form.tags.split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
+    if (editScript) {
+      setScripts(prev => prev.map(sc => sc.id === editScript.id ? { ...sc, ...form, tags } : sc));
+      setEditScript(null);
+    } else {
+      setScripts(prev => [...prev, { id: Date.now(), ...form, tags, createdBy: "Admin User", date: today }]);
+      setAddOpen(false);
+    }
+    setForm({ title: "", category: "Call Script", content: "", tags: "" });
+  };
+
+  const openEdit = (sc) => { setEditScript(sc); setForm({ title: sc.title, category: sc.category, content: sc.content, tags: sc.tags.join(", ") }); };
+  const copyScript = (content) => { navigator.clipboard?.writeText(content); };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff" }}>📋 Scripts Library</div>
+          <div style={{ fontSize: 13, color: "#4b5a78", marginTop: 3 }}>Call scripts, objection handlers & onboarding guides</div>
+        </div>
+        {isAdmin && <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#3b82f6,#8b5cf6)" }} onClick={() => { setAddOpen(true); setEditScript(null); setForm({ title: "", category: "Call Script", content: "", tags: "" }); }}>+ Add Script</button>}
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        <input style={{ ...s.input, maxWidth: 260 }} placeholder="🔍 Search scripts…" value={search} onChange={e => setSearch(e.target.value)} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {categories.map(cat => <button key={cat} onClick={() => setFilterCat(cat)} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterCat === cat ? (catColors2[cat] || "#3b82f6") : "#1e2535", color: filterCat === cat ? "#fff" : "#8899b4" }}>{cat !== "All" ? catIcons2[cat] + " " : ""}{cat}</button>)}
+        </div>
+        <span style={{ fontSize: 12, color: "#4b5a78", marginLeft: "auto" }}>{filtered.length} scripts</span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {filtered.length === 0 && <div style={{ textAlign: "center", padding: "48px 0", color: "#4b5a78" }}><div style={{ fontSize: 36, marginBottom: 10 }}>📭</div><div>No scripts found.</div></div>}
+        {filtered.map(sc => {
+          const isExp = expanded === sc.id;
+          return (
+            <div key={sc.id} style={{ background: "#161b27", borderRadius: 14, border: "1px solid #1e2535", overflow: "hidden" }}>
+              <div style={{ padding: "18px 22px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: isExp ? 14 : 0 }}>
+                  <div style={{ fontSize: 24 }}>{catIcons2[sc.category] || "📄"}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{sc.title}</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={s.badge(catColors2[sc.category] || "#4b5a78")}>{sc.category}</span>
+                      {sc.tags.map(t => <span key={t} style={{ fontSize: 10, color: "#4b5a78", background: "#0f1117", padding: "2px 8px", borderRadius: 10 }}>#{t}</span>)}
+                      <span style={{ fontSize: 11, color: "#4b5a78" }}>by {sc.createdBy} · {sc.date}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => copyScript(sc.content)} title="Copy script" style={{ ...s.btn("secondary"), padding: "6px 12px", fontSize: 12 }}>📋 Copy</button>
+                    {isAdmin && <button onClick={() => openEdit(sc)} style={{ ...s.btn("secondary"), padding: "6px 12px", fontSize: 12 }}>✏️ Edit</button>}
+                    {isAdmin && <button onClick={() => setScripts(prev => prev.filter(x => x.id !== sc.id))} style={{ ...s.btn("danger"), padding: "6px 10px", fontSize: 12 }}>🗑️</button>}
+                    <button onClick={() => setExpanded(isExp ? null : sc.id)} style={{ ...s.btn("ghost"), padding: "6px 10px", fontSize: 14 }}>{isExp ? "▲" : "▼"}</button>
+                  </div>
+                </div>
+                {isExp && (
+                  <div style={{ background: "#0f1117", borderRadius: 10, padding: "16px 18px", whiteSpace: "pre-wrap", fontSize: 13, color: "#c8d4e8", lineHeight: 1.8, fontFamily: "monospace" }}>
+                    {sc.content}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {(addOpen || editScript) && (
+        <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => { setAddOpen(false); setEditScript(null); }}>
+          <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 560, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 20 }}>{editScript ? "✏️ Edit Script" : "➕ New Script"}</div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Title</label>
+              <input style={s.input} placeholder='e.g. "Cold Call Opening"' value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Category</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["Call Script", "Objection Handler", "Onboarding"].map(cat => (
+                  <button key={cat} onClick={() => setForm(p => ({ ...p, category: cat }))} style={{ padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: form.category === cat ? (catColors2[cat] || "#3b82f6") : "#1e2535", color: form.category === cat ? "#fff" : "#8899b4" }}>{catIcons2[cat]} {cat}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Script Content</label>
+              <textarea style={{ ...s.input, minHeight: 200, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} placeholder="Write your script here. Use [brackets] for placeholders…" value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={s.label}>Tags (comma separated)</label>
+              <input style={s.input} placeholder="e.g. cold call, opening, sales" value={form.tags} onChange={e => setForm(p => ({ ...p, tags: e.target.value }))} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={s.btn("secondary")} onClick={() => { setAddOpen(false); setEditScript(null); }}>Cancel</button>
+              <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#3b82f6,#8b5cf6)" }} onClick={saveScript}>{editScript ? "Save Changes" : "Add Script"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Mini SVG Charts ────────────────────────────────────────
+function LineChart({ data, color = "#3b82f6", valueKey = "revenue" }) {
+  const vals = data.map(d => d[valueKey]);
+  const max = Math.max(...vals) || 1;
+  const min = Math.min(...vals);
+  const w = 480, h = 120, pad = 10;
+  const points = vals.map((v, i) => {
+    const x = pad + (i / (vals.length - 1)) * (w - pad * 2);
+    const y = pad + (1 - (v - min) / (max - min || 1)) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  const areaPoints = `${pad},${h - pad} ` + points + ` ${w - pad},${h - pad}`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 120 }}>
+      <defs>
+        <linearGradient id={`grad-${valueKey}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={areaPoints} fill={`url(#grad-${valueKey})`} />
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {vals.map((v, i) => {
+        const x = pad + (i / (vals.length - 1)) * (w - pad * 2);
+        const y = pad + (1 - (v - min) / (max - min || 1)) * (h - pad * 2);
+        return <circle key={i} cx={x} cy={y} r="4" fill={color} stroke="#161b27" strokeWidth="2" />;
+      })}
+    </svg>
+  );
+}
+
+function BarChart({ agents, performance }) {
+  const sorted = [...agents].sort((a, b) => (performance[b.id]?.revenue || 0) - (performance[a.id]?.revenue || 0));
+  const maxRev = Math.max(...sorted.map(a => performance[a.id]?.revenue || 0)) || 1;
+  const colors = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"];
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 12, height: 120, padding: "0 8px" }}>
+      {sorted.map((agent, i) => {
+        const rev = performance[agent.id]?.revenue || 0;
+        const pct = (rev / maxRev) * 100;
+        return (
+          <div key={agent.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, height: "100%", justifyContent: "flex-end" }}>
+            <div style={{ fontSize: 10, color: colors[i % colors.length], fontWeight: 700 }}>₱{(rev / 1000).toFixed(0)}k</div>
+            <div style={{ width: "100%", height: `${pct}%`, background: colors[i % colors.length], borderRadius: "4px 4px 0 0", minHeight: 4, opacity: 0.85 }} />
+            <div style={{ fontSize: 10, color: "#4b5a78", textAlign: "center", lineHeight: 1.2 }}>{agent.name.split(" ")[0]}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Transferred Leads ──────────────────────────────────────
+function TransferredLeads({ transfers, setTransfers, currentUser, users, performance, setPerformance, isAdmin }) {
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [form, setForm] = useState({ firstName: "", lastName: "", phone: "", state: "", hasLoan: false, agreedService: false, monthlyPayment: "250" });
+  const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSubmit = () => {
+    if (!form.firstName || !form.lastName || !form.phone || !form.state) return alert("Please fill in all required fields.");
+    const newTransfer = {
+      id: Date.now(), agentId: currentUser.id, agentName: currentUser.name, agentAvatar: currentUser.avatar,
+      firstName: form.firstName, lastName: form.lastName, phone: form.phone, state: form.state,
+      hasLoan: form.hasLoan, agreedService: form.agreedService, monthlyPayment: parseFloat(form.monthlyPayment) || 250,
+      status: "Pending", date: today, time: new Date().toLocaleTimeString(), reviewedBy: null, reviewNote: ""
+    };
+    setTransfers(prev => [newTransfer, ...prev]);
+    setSubmitOpen(false);
+    setForm({ firstName: "", lastName: "", phone: "", state: "", hasLoan: false, agreedService: false, monthlyPayment: "250" });
+  };
+
+  const handleTag = (id, status) => {
+    setTransfers(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const tagged = { ...t, status, reviewedBy: currentUser.name };
+      if (status === "Successful") {
+        setPerformance(prev => {
+          const agentPerf = prev[t.agentId] || { calls: 0, deals: 0, revenue: 0, tasks: 0 };
+          return { ...prev, [t.agentId]: { ...agentPerf, deals: agentPerf.deals + 1, revenue: agentPerf.revenue + (t.monthlyPayment * 12) } };
+        });
+      }
+      return tagged;
+    }));
+  };
+
+  const myTransfers = isAdmin ? transfers : transfers.filter(t => t.agentId === currentUser.id);
+  const filtered = myTransfers.filter(t => filterStatus === "All" || t.status === filterStatus);
+  const statusColor = { Pending: "#f59e0b", Successful: "#10b981", Unsuccessful: "#ef4444" };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff" }}>🔄 Transferred Leads</div>
+          <div style={{ fontSize: 13, color: "#4b5a78", marginTop: 3 }}>Submit and track buffered transfer leads</div>
+        </div>
+        {!isAdmin && <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#10b981,#3b82f6)" }} onClick={() => setSubmitOpen(true)}>+ Submit Transfer</button>}
+      </div>
+
+      <div style={s.grid4}>
+        {[
+          { l: "Total Submitted", v: myTransfers.length, c: "#60a5fa", i: "📋" },
+          { l: "Successful", v: myTransfers.filter(t => t.status === "Successful").length, c: "#10b981", i: "✅" },
+          { l: "Pending Review", v: myTransfers.filter(t => t.status === "Pending").length, c: "#f59e0b", i: "⏳" },
+          { l: "Unsuccessful", v: myTransfers.filter(t => t.status === "Unsuccessful").length, c: "#ef4444", i: "❌" },
+        ].map((stat, i) => (
+          <div key={i} style={s.statCard}>
+            <div style={{ fontSize: 22, marginBottom: 6 }}>{stat.i}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: stat.c }}>{stat.v}</div>
+            <div style={{ fontSize: 12, color: "#4b5a78", marginTop: 4 }}>{stat.l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {["All", "Pending", "Successful", "Unsuccessful"].map(st => (
+          <button key={st} onClick={() => setFilterStatus(st)} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterStatus === st ? (statusColor[st] || "#3b82f6") : "#1e2535", color: filterStatus === st ? "#fff" : "#8899b4" }}>{st}</button>
+        ))}
+      </div>
+
+      <div style={s.card}>
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 0", color: "#4b5a78" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+            <div>No transfers found. {!isAdmin && "Submit your first transfer above!"}</div>
+          </div>
+        ) : (
+          <table style={s.table}>
+            <thead><tr>
+              {[isAdmin ? "Agent" : null, "Lead Name", "Phone", "State", "Loan", "Monthly", "Status", "Date", isAdmin ? "Action" : null].filter(Boolean).map(h => <th key={h} style={s.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {filtered.map(t => (
+                <tr key={t.id}>
+                  {isAdmin && <td style={s.td}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ ...s.avatar(28), fontSize: 10 }}>{t.agentAvatar}</div><span style={{ fontWeight: 600, color: "#fff" }}>{t.agentName}</span></div></td>}
+                  <td style={s.td}><span style={{ fontWeight: 600, color: "#fff" }}>{t.firstName} {t.lastName}</span></td>
+                  <td style={s.td}>{t.phone}</td>
+                  <td style={s.td}>{t.state}</td>
+                  <td style={s.td}><span style={s.badge(t.hasLoan ? "#10b981" : "#ef4444")}>{t.hasLoan ? "Yes" : "No"}</span></td>
+                  <td style={s.td}><span style={{ color: "#10b981", fontWeight: 600 }}>${t.monthlyPayment}/mo</span></td>
+                  <td style={s.td}><span style={s.badge(statusColor[t.status] || "#4b5a78")}>{t.status}</span></td>
+                  <td style={s.td}><div style={{ fontSize: 12 }}>{t.date}</div><div style={{ fontSize: 10, color: "#4b5a78" }}>{t.time}</div></td>
+                  {isAdmin && (
+                    <td style={s.td}>
+                      {t.status === "Pending" ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button style={{ ...s.btn("success"), padding: "5px 10px", fontSize: 11, background: "#10b981" }} onClick={() => handleTag(t.id, "Successful")}>✅ Success</button>
+                          <button style={{ ...s.btn("danger"), padding: "5px 10px", fontSize: 11 }} onClick={() => handleTag(t.id, "Unsuccessful")}>❌ Failed</button>
+                        </div>
+                      ) : <span style={{ fontSize: 11, color: "#4b5a78" }}>Reviewed by {t.reviewedBy}</span>}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {submitOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setSubmitOpen(false)}>
+          <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 500, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 6 }}>🔄 Submit Transferred Lead</div>
+            <div style={{ fontSize: 13, color: "#4b5a78", marginBottom: 20 }}>Fill in the lead's information for management review</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+              <div><label style={s.label}>First Name *</label><input style={s.input} placeholder="John" value={form.firstName} onChange={e => f("firstName", e.target.value)} /></div>
+              <div><label style={s.label}>Last Name *</label><input style={s.input} placeholder="Smith" value={form.lastName} onChange={e => f("lastName", e.target.value)} /></div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+              <div><label style={s.label}>Phone Number *</label><input style={s.input} placeholder="(555) 123-4567" value={form.phone} onChange={e => f("phone", e.target.value)} /></div>
+              <div><label style={s.label}>State *</label><input style={s.input} placeholder="e.g. California" value={form.state} onChange={e => f("state", e.target.value)} /></div>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Monthly Payment</label>
+              <input style={s.input} type="number" value={form.monthlyPayment} onChange={e => f("monthlyPayment", e.target.value)} />
+              <div style={{ fontSize: 11, color: "#4b5a78", marginTop: 4 }}>Default: $250/month</div>
+            </div>
+            <div style={{ background: "#0f1117", borderRadius: 12, padding: "16px", marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 12 }}>Lead Qualifications</div>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 12 }}>
+                <input type="checkbox" checked={form.hasLoan} onChange={e => f("hasLoan", e.target.checked)} style={{ width: 16, height: 16, accentColor: "#3b82f6" }} />
+                <div><div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 600 }}>Has $15k Personal Loan</div><div style={{ fontSize: 11, color: "#4b5a78" }}>Lead confirmed having a personal loan of $15,000</div></div>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={form.agreedService} onChange={e => f("agreedService", e.target.checked)} style={{ width: 16, height: 16, accentColor: "#3b82f6" }} />
+                <div><div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 600 }}>Agreed to Our Service</div><div style={{ fontSize: 11, color: "#4b5a78" }}>Lead agreed to pay ${form.monthlyPayment}/month</div></div>
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={s.btn("secondary")} onClick={() => setSubmitOpen(false)}>Cancel</button>
+              <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#10b981,#3b82f6)", flex: 1 }} onClick={handleSubmit}>Submit Transfer</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Coaching Sessions ──────────────────────────────────────
+function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }) {
+  const [addOpen, setAddOpen] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+  const [commentText, setCommentText] = useState({});
+  const [filterAgent, setFilterAgent] = useState("All");
+  const [form, setForm] = useState({ agentId: "", topic: "", notes: "", actionItems: "", rating: "3" });
+  const agents = users.filter(u => u.role === "agent");
+  const ratingColors = { 1: "#ef4444", 2: "#f59e0b", 3: "#3b82f6", 4: "#8b5cf6", 5: "#10b981" };
+  const ratingLabels = { 1: "Needs Improvement", 2: "Below Average", 3: "Average", 4: "Good", 5: "Excellent" };
+
+  const handleAdd = () => {
+    if (!form.agentId || !form.topic) return alert("Please select an agent and add a topic.");
+    const agent = users.find(u => u.id === parseInt(form.agentId));
+    const session = {
+      id: Date.now(), agentId: parseInt(form.agentId), agentName: agent?.name, agentAvatar: agent?.avatar,
+      coachName: currentUser.name, topic: form.topic, notes: form.notes,
+      actionItems: form.actionItems.split("\n").filter(Boolean),
+      rating: parseInt(form.rating), date: today, comments: []
+    };
+    setCoaching(prev => [session, ...prev]);
+    setAddOpen(false);
+    setForm({ agentId: "", topic: "", notes: "", actionItems: "", rating: "3" });
+  };
+
+  const handleComment = (sessionId) => {
+    const text = commentText[sessionId]?.trim();
+    if (!text) return;
+    setCoaching(prev => prev.map(c => c.id !== sessionId ? c : { ...c, comments: [...c.comments, { author: currentUser.name, avatar: currentUser.avatar, text, date: today }] }));
+    setCommentText(p => ({ ...p, [sessionId]: "" }));
+  };
+
+  const myCoaching = isAdmin ? coaching : coaching.filter(c => c.agentId === currentUser.id);
+  const filtered = myCoaching.filter(c => filterAgent === "All" || c.agentId === parseInt(filterAgent));
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff" }}>🎓 Coaching Sessions</div>
+          <div style={{ fontSize: 13, color: "#4b5a78", marginTop: 3 }}>Track coaching notes, action items and agent progress</div>
+        </div>
+        {isAdmin && <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#8b5cf6,#3b82f6)" }} onClick={() => setAddOpen(true)}>+ Add Session</button>}
+      </div>
+
+      {isAdmin && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          <button onClick={() => setFilterAgent("All")} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterAgent === "All" ? "#3b82f6" : "#1e2535", color: filterAgent === "All" ? "#fff" : "#8899b4" }}>All Agents</button>
+          {agents.map(a => <button key={a.id} onClick={() => setFilterAgent(String(a.id))} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterAgent === String(a.id) ? "#8b5cf6" : "#1e2535", color: filterAgent === String(a.id) ? "#fff" : "#8899b4" }}>{a.name.split(" ")[0]}</button>)}
+        </div>
+      )}
+
+      {filtered.length === 0 && (
+        <div style={{ textAlign: "center", padding: "60px 0", color: "#4b5a78" }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>🎓</div>
+          <div style={{ fontSize: 14 }}>{isAdmin ? "No coaching sessions yet. Add your first one!" : "No coaching sessions recorded for you yet."}</div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {filtered.map(session => {
+          const isExp = expanded === session.id;
+          return (
+            <div key={session.id} style={{ background: "#161b27", borderRadius: 16, border: "1px solid #1e2535", overflow: "hidden" }}>
+              <div style={{ padding: "20px 24px" }}>
+                <div style={{ display: "flex", gap: 14, marginBottom: 14, alignItems: "flex-start" }}>
+                  <div style={{ width: 46, height: 46, borderRadius: "50%", background: "linear-gradient(135deg,#8b5cf6,#3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{session.agentAvatar}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>{session.topic}</div>
+                    <div style={{ fontSize: 12, color: "#4b5a78", marginTop: 3 }}>
+                      Agent: <span style={{ color: "#c8d4e8" }}>{session.agentName}</span> · Coach: <span style={{ color: "#c8d4e8" }}>{session.coachName}</span> · {session.date}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
+                      <span style={s.badge(ratingColors[session.rating] || "#3b82f6")}>{'⭐'.repeat(session.rating)} {ratingLabels[session.rating]}</span>
+                      <span style={{ fontSize: 11, color: "#4b5a78" }}>💬 {session.comments.length} comments</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setExpanded(isExp ? null : session.id)} style={{ ...s.btn("ghost"), padding: "6px 10px" }}>{isExp ? "▲" : "▼"}</button>
+                </div>
+
+                {isExp && (
+                  <div>
+                    {session.notes && (
+                      <div style={{ background: "#0f1117", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4b5a78", marginBottom: 8 }}>📝 SESSION NOTES</div>
+                        <div style={{ fontSize: 13, color: "#c8d4e8", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{session.notes}</div>
+                      </div>
+                    )}
+                    {session.actionItems?.length > 0 && (
+                      <div style={{ background: "#0f1117", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4b5a78", marginBottom: 8 }}>✅ ACTION ITEMS</div>
+                        {session.actionItems.map((item, i) => (
+                          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, fontSize: 13, color: "#c8d4e8" }}>
+                            <span style={{ color: "#8b5cf6", fontWeight: 700 }}>{i + 1}.</span>{item}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ borderTop: "1px solid #1e2535", paddingTop: 16 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#4b5a78", marginBottom: 12 }}>COMMENTS</div>
+                      {session.comments.length === 0 && <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>No comments yet.</div>}
+                      {session.comments.map((c, i) => (
+                        <div key={i} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{c.avatar}</div>
+                          <div style={{ flex: 1, background: "#0f1117", borderRadius: 10, padding: "9px 13px" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", marginBottom: 3 }}>{c.author} <span style={{ fontSize: 10, color: "#4b5a78", fontWeight: 400 }}>{c.date}</span></div>
+                            <div style={{ fontSize: 13, color: "#c8d4e8" }}>{c.text}</div>
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                        <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{currentUser.avatar}</div>
+                        <input style={{ ...s.input, flex: 1 }} placeholder="Add a comment…" value={commentText[session.id] || ""} onChange={e => setCommentText(p => ({ ...p, [session.id]: e.target.value }))} onKeyDown={e => e.key === "Enter" && handleComment(session.id)} />
+                        <button style={{ ...s.btn("primary"), padding: "9px 14px" }} onClick={() => handleComment(session.id)}>Send</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {addOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setAddOpen(false)}>
+          <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 540, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 20 }}>🎓 New Coaching Session</div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Agent *</label>
+              <select style={s.input} value={form.agentId} onChange={e => setForm(p => ({ ...p, agentId: e.target.value }))}>
+                <option value="">Select agent…</option>
+                {agents.map(a => <option key={a.id} value={a.id}>{a.name} — {a.department}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Session Topic *</label>
+              <input style={s.input} placeholder='e.g. "Objection Handling", "Closing Techniques"' value={form.topic} onChange={e => setForm(p => ({ ...p, topic: e.target.value }))} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Session Notes</label>
+              <textarea style={{ ...s.input, minHeight: 120, resize: "vertical" }} placeholder="What was discussed in this coaching session?" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Action Items (one per line)</label>
+              <textarea style={{ ...s.input, minHeight: 80, resize: "vertical" }} placeholder={"Practice objection scripts daily\nReview top 3 call recordings\nShadow senior agent this week"} value={form.actionItems} onChange={e => setForm(p => ({ ...p, actionItems: e.target.value }))} />
+            </div>
+            <div style={{ marginBottom: 22 }}>
+              <label style={s.label}>Overall Rating</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[1, 2, 3, 4, 5].map(r => (
+                  <button key={r} onClick={() => setForm(p => ({ ...p, rating: String(r) }))} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: `2px solid ${form.rating === String(r) ? ratingColors[r] : "#1e2535"}`, background: form.rating === String(r) ? ratingColors[r] + "22" : "#0f1117", cursor: "pointer", fontSize: 13, fontWeight: 700, color: form.rating === String(r) ? ratingColors[r] : "#4b5a78" }}>
+                    {'⭐'.repeat(r)}<div style={{ fontSize: 9, marginTop: 3 }}>{ratingLabels[r]}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={s.btn("secondary")} onClick={() => setAddOpen(false)}>Cancel</button>
+              <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#8b5cf6,#3b82f6)", flex: 1 }} onClick={handleAdd}>Save Session</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -558,6 +1106,14 @@ function FreedomBoard({ boardPosts, setBoardPosts, currentUser, isAdmin }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         {categories.map(cat => <button key={cat} onClick={() => setFilterCat(cat)} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterCat === cat ? (catColors[cat] || "#3b82f6") : "#1e2535", color: filterCat === cat ? "#fff" : "#8899b4" }}>{cat !== "All" ? catIcons[cat] + " " : ""}{cat}</button>)}
       </div>
+
+      {filtered.length === 0 && (
+        <div style={{ textAlign: "center", padding: "60px 0", color: "#4b5a78" }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>📌</div>
+          <div style={{ fontSize: 14 }}>No posts yet. Be the first to share something with the team!</div>
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {filtered.map(post => {
           const isExp = expandedPost === post.id;
@@ -601,6 +1157,7 @@ function FreedomBoard({ boardPosts, setBoardPosts, currentUser, isAdmin }) {
           );
         })}
       </div>
+
       {newPostOpen && (
         <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setNewPostOpen(false)}>
           <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 500 }} onClick={e => e.stopPropagation()}>
@@ -626,11 +1183,14 @@ function FreedomBoard({ boardPosts, setBoardPosts, currentUser, isAdmin }) {
 
 // ── MAIN APP ───────────────────────────────────────────────
 export default function CRM() {
-  const [users, setUsers] = useState(() => storage.get("crm_users", initialUsers));
-  const [leads, setLeads] = useState(() => storage.get("crm_leads", initialLeads));
-  const [attendance, setAttendance] = useState(() => storage.get("crm_attendance", initialAttendance));
-  const [performance] = useState(initialPerformance);
-  const [boardPosts, setBoardPosts] = useState(() => storage.get("crm_board", initialBoardPosts));
+  const [users, setUsers] = useState(initialUsers);
+  const [leads, setLeads] = useState(initialLeads);
+  const [attendance, setAttendance] = useState(initialAttendance);
+  const [performance, setPerformance] = useState(initialPerformance);
+  const [boardPosts, setBoardPosts] = useState([]);
+  const [scripts, setScripts] = useState(initialScripts);
+  const [transfers, setTransfers] = useState([]);
+  const [coaching, setCoaching] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [clockedIn, setClockedIn] = useState(false);
@@ -644,9 +1204,6 @@ export default function CRM() {
   const [showNotif, setShowNotif] = useState(false);
 
   useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(t); }, []);
-  useEffect(() => { storage.set("crm_leads", leads); }, [leads]);
-  useEffect(() => { storage.set("crm_board", boardPosts); }, [boardPosts]);
-  useEffect(() => { storage.set("crm_attendance", attendance); }, [attendance]);
 
   const handleLogin = (user) => { setCurrentUser(user); setActiveTab("dashboard"); };
   const handleLogout = () => { setCurrentUser(null); setClockedIn(false); setClockTime(null); };
@@ -686,11 +1243,11 @@ export default function CRM() {
   const totalRev = Object.values(performance).reduce((s, p) => s + p.revenue, 0);
   const totalDeals = Object.values(performance).reduce((s, p) => s + p.deals, 0);
 
-  const adminTabs = ["dashboard", "overview", "leads", "agents", "attendance", "performance", "automations", "board", "users", "settings"];
-  const agentTabs = ["dashboard", "my-leads", "my-attendance", "my-performance", "board", "settings"];
+  const adminTabs = ["dashboard", "overview", "leads", "agents", "transfers", "attendance", "performance", "coaching", "automations", "board", "scripts", "users", "settings"];
+  const agentTabs = ["dashboard", "my-leads", "my-attendance", "my-performance", "transfers", "coaching", "board", "scripts", "settings"];
   const tabs = isAdmin ? adminTabs : agentTabs;
-  const tabLabels = { dashboard: "Dashboard", overview: "Agent Overview", leads: "Leads", agents: "Team", attendance: "Attendance", performance: "Performance", automations: "Automations", board: "Freedom Board", users: "User Management", settings: "My Profile", "my-leads": "My Leads", "my-attendance": "My Attendance", "my-performance": "My Performance" };
-  const tabIcons = { dashboard: "📊", overview: "🪪", leads: "🎯", agents: "👥", attendance: "🕐", performance: "📈", automations: "⚙️", board: "📌", users: "👤", settings: "⚙️", "my-leads": "🎯", "my-attendance": "🕐", "my-performance": "📈" };
+  const tabLabels = { dashboard: "Dashboard", overview: "Agent Overview", leads: "Leads", agents: "Team", transfers: "Transfers", attendance: "Attendance", performance: "Performance", coaching: "Coaching", automations: "Automations", board: "Freedom Board", scripts: "Scripts Library", users: "User Management", settings: "My Profile", "my-leads": "My Leads", "my-attendance": "My Attendance", "my-performance": "My Performance" };
+  const tabIcons = { dashboard: "📊", overview: "🪪", leads: "🎯", agents: "👥", transfers: "🔄", attendance: "🕐", performance: "📈", coaching: "🎓", automations: "⚙️", board: "📌", scripts: "📋", users: "👤", settings: "⚙️", "my-leads": "🎯", "my-attendance": "🕐", "my-performance": "📈" };
 
   const notifications = [
     { id: 1, text: "New lead assigned to you", type: "info", time: "09:00" },
@@ -701,6 +1258,9 @@ export default function CRM() {
   const renderContent = () => {
     if (activeTab === "board") return <FreedomBoard boardPosts={boardPosts} setBoardPosts={setBoardPosts} currentUser={currentUser} isAdmin={isAdmin} />;
     if (activeTab === "overview") return <AgentOverview agents={agents} performance={performance} attendance={attendance} leads={leads} />;
+    if (activeTab === "scripts") return <ScriptsLibrary scripts={scripts} setScripts={setScripts} isAdmin={isAdmin} />;
+    if (activeTab === "transfers") return <TransferredLeads transfers={transfers} setTransfers={setTransfers} currentUser={currentUser} users={users} performance={performance} setPerformance={setPerformance} isAdmin={isAdmin} />;
+    if (activeTab === "coaching") return <CoachingSessions coaching={coaching} setCoaching={setCoaching} currentUser={currentUser} users={users} isAdmin={isAdmin} />;
     if (activeTab === "users") return <UserManagement users={users} setUsers={setUsers} currentUser={currentUser} />;
     if (activeTab === "settings") return <ProfileSettings currentUser={currentUser} users={users} setUsers={setUsers} onLogout={handleLogout} />;
 
@@ -712,6 +1272,42 @@ export default function CRM() {
               <div key={i} style={s.statCard}><div style={{ fontSize: 22, marginBottom: 8 }}>{stat.i}</div><div style={{ fontSize: 28, fontWeight: 800, color: "#fff" }}>{stat.v}</div><div style={{ fontSize: 12, color: "#4b5a78", marginTop: 4 }}>{stat.l}</div><div style={{ fontSize: 12, color: stat.pos ? "#10b981" : "#ef4444", marginTop: 2 }}>{stat.ch}</div></div>
             ))}
           </div>
+
+          <div style={s.grid2}>
+            <div style={s.card}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>📈 Revenue Trend (This Week)</div>
+              <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>Daily revenue performance</div>
+              <LineChart data={initialTrendData} color="#3b82f6" valueKey="revenue" />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                {initialTrendData.map((d, i) => <span key={i} style={{ fontSize: 10, color: "#4b5a78", flex: 1, textAlign: "center" }}>{d.day}</span>)}
+              </div>
+            </div>
+            <div style={s.card}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>📊 Revenue by Agent</div>
+              <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>Monthly comparison</div>
+              <BarChart agents={agents} performance={performance} />
+            </div>
+          </div>
+
+          <div style={s.grid2}>
+            <div style={s.card}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>🤝 Deals Trend</div>
+              <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>Daily deals closed this week</div>
+              <LineChart data={initialTrendData} color="#10b981" valueKey="deals" />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                {initialTrendData.map((d, i) => <span key={i} style={{ fontSize: 10, color: "#4b5a78", flex: 1, textAlign: "center" }}>{d.day}</span>)}
+              </div>
+            </div>
+            <div style={s.card}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>📞 Calls Trend</div>
+              <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>Daily calls made this week</div>
+              <LineChart data={initialTrendData} color="#8b5cf6" valueKey="calls" />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                {initialTrendData.map((d, i) => <span key={i} style={{ fontSize: 10, color: "#4b5a78", flex: 1, textAlign: "center" }}>{d.day}</span>)}
+              </div>
+            </div>
+          </div>
+
           <div style={s.grid2}>
             <div style={s.card}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 16 }}>Lead Pipeline</div>
@@ -729,6 +1325,7 @@ export default function CRM() {
               ))}
             </div>
           </div>
+
           <div style={s.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>🤖 AI Team Insight</div>
@@ -738,6 +1335,7 @@ export default function CRM() {
           </div>
         </div>
       );
+
       if (activeTab === "leads") return (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
@@ -762,6 +1360,7 @@ export default function CRM() {
           </div>
         </div>
       );
+
       if (activeTab === "agents") return (
         <div style={s.grid2}>
           {agents.map(agent => { const perf = performance[agent.id] || {}; const attRecs = attendance[agent.id] || []; const present = attRecs.filter(r => r.status === "Present" || r.status === "Late").length; return (
@@ -776,6 +1375,7 @@ export default function CRM() {
           ); })}
         </div>
       );
+
       if (activeTab === "attendance") return (
         <div style={s.card}>
           <table style={s.table}>
@@ -790,6 +1390,7 @@ export default function CRM() {
           </table>
         </div>
       );
+
       if (activeTab === "performance") return (
         <div style={s.card}>
           <table style={s.table}>
@@ -806,6 +1407,7 @@ export default function CRM() {
           </table>
         </div>
       );
+
       if (activeTab === "automations") return (
         <div>{[{ icon: "📧", name: "Follow-up Reminder", desc: "Auto-remind agents when a lead hasn't been contacted in 3 days", status: "Active" }, { icon: "⚠️", name: "Late Attendance Alert", desc: "Notify admin when an agent clocks in after 08:15", status: "Active" }, { icon: "🏆", name: "Deal Won Celebration", desc: "Post to team channel when a deal is closed", status: "Active" }, { icon: "📊", name: "Weekly Performance Report", desc: "Send performance summary every Monday 8AM", status: "Active" }, { icon: "🔁", name: "Lead Reassignment", desc: "Auto-reassign leads if agent is absent 2+ days", status: "Inactive" }].map((r, i) => (
           <div key={i} style={{ ...s.card, display: "flex", alignItems: "center", gap: 16 }}><div style={{ fontSize: 28 }}>{r.icon}</div><div style={{ flex: 1 }}><div style={{ fontWeight: 700, color: "#fff", fontSize: 14 }}>{r.name}</div><div style={{ fontSize: 12, color: "#4b5a78", marginTop: 3 }}>{r.desc}</div></div><span style={s.badge(r.status === "Active" ? "#10b981" : "#4b5a78")}>{r.status}</span></div>
@@ -864,7 +1466,7 @@ export default function CRM() {
         </div>
         <div style={{ padding: "16px 12px", borderTop: "1px solid #1e2535" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={s.avatar(32)}>{currentUser.avatar}</div>
+            <ProfilePic user={users.find(u => u.id === currentUser.id) || currentUser} size={32} />
             <div style={{ flex: 1, overflow: "hidden" }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#c8d4e8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
               <div style={{ fontSize: 10, color: "#4b5a78" }}>{isAdmin ? "Administrator" : "Agent"}</div>
