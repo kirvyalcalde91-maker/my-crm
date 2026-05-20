@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
 
+// ── Persistent storage using localStorage ──────────────────
+const storage = {
+  get: (key, fallback) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+  set: (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} },
+};
+
 const initialUsers = [
   { id: 1, name: "Admin User", email: "admin@company.com", password: "admin123", role: "admin", avatar: "AD", department: "Management", target: 0, status: "active", joined: "2026-01-01" },
   { id: 2, name: "Maria Santos", email: "maria@company.com", password: "agent123", role: "agent", avatar: "MS", department: "Sales", target: 50, status: "active", joined: "2026-01-15" },
@@ -26,6 +32,12 @@ const initialAttendance = {
 };
 
 const initialPerformance = { 2: { calls: 38, deals: 5, revenue: 34000, tasks: 22 }, 3: { calls: 29, deals: 3, revenue: 18500, tasks: 18 }, 4: { calls: 42, deals: 6, revenue: 41000, tasks: 25 }, 5: { calls: 21, deals: 2, revenue: 10000, tasks: 15 } };
+
+const initialBoardPosts = [];
+
+const initialTransfers = [];
+
+const initialCoaching = [];
 
 const initialTrendData = [
   { day: "Mon", revenue: 8000, deals: 1, calls: 18 },
@@ -69,7 +81,7 @@ const s = {
 // ── Auth Pages ─────────────────────────────────────────────
 function AuthPage({ users, setUsers, onLogin }) {
   const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", department: "Sales", role: "agent" });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -82,25 +94,11 @@ function AuthPage({ users, setUsers, onLogin }) {
     onLogin(user);
   };
 
-  const handleSignup = () => {
-    setError("");
-    if (!form.name || !form.email || !form.password) return setError("Please fill in all fields.");
-    if (form.password !== form.confirm) return setError("Passwords do not match.");
-    if (form.password.length < 6) return setError("Password must be at least 6 characters.");
-    if (users.find(u => u.email.toLowerCase() === form.email.toLowerCase())) return setError("An account with this email already exists.");
-    const initials = form.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    const newUser = { id: Date.now(), name: form.name, email: form.email, password: form.password, role: "agent", avatar: initials, department: form.department, target: 40, status: "active", joined: today };
-    setUsers(prev => [...prev, newUser]);
-    setSuccess("Account created! You can now sign in.");
-    setMode("login");
-    setForm(p => ({ ...p, password: "", confirm: "" }));
-  };
-
   const handleForgot = () => {
     setError("");
     const user = users.find(u => u.email.toLowerCase() === form.email.toLowerCase());
     if (!user) return setError("No account found with that email.");
-    setSuccess(`Password reminder: your password is "${user.password}". Please change it after logging in.`);
+    setSuccess(`Password hint: "${user.password}" — please change it after logging in.`);
   };
 
   return (
@@ -111,64 +109,41 @@ function AuthPage({ users, setUsers, onLogin }) {
           <div style={{ fontSize: 32, marginBottom: 8 }}>⚡</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#fff" }}>TeamCRM</div>
           <div style={{ fontSize: 13, color: "#4b5a78", marginTop: 4 }}>
-            {mode === "login" ? "Sign in to your workspace" : mode === "signup" ? "Create your account" : "Reset your password"}
+            {mode === "login" ? "Sign in to your workspace" : "Forgot your password?"}
           </div>
         </div>
 
         {error && <div style={{ background: "#ef444422", border: "1px solid #ef4444", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#ef4444" }}>{error}</div>}
         {success && <div style={{ background: "#10b98122", border: "1px solid #10b981", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#10b981" }}>{success}</div>}
 
-        {mode === "signup" && (
-          <div style={{ marginBottom: 14 }}>
-            <label style={s.label}>Full Name</label>
-            <input style={s.input} placeholder="Maria Santos" value={form.name} onChange={e => f("name", e.target.value)} />
-          </div>
-        )}
-
         <div style={{ marginBottom: 14 }}>
           <label style={s.label}>Email</label>
-          <input style={s.input} placeholder="you@company.com" value={form.email} onChange={e => f("email", e.target.value)} />
+          <input style={s.input} placeholder="you@company.com" value={form.email} onChange={e => f("email", e.target.value)} onKeyDown={e => mode === "login" && e.key === "Enter" && handleLogin()} />
         </div>
 
-        {mode !== "forgot" && (
-          <div style={{ marginBottom: 14 }}>
+        {mode === "login" && (
+          <div style={{ marginBottom: 24 }}>
             <label style={s.label}>Password</label>
-            <input style={s.input} type="password" placeholder="••••••••" value={form.password} onChange={e => f("password", e.target.value)} onKeyDown={e => mode === "login" && e.key === "Enter" && handleLogin()} />
+            <input style={s.input} type="password" placeholder="••••••••" value={form.password} onChange={e => f("password", e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
           </div>
         )}
 
-        {mode === "signup" && (
-          <>
-            <div style={{ marginBottom: 14 }}>
-              <label style={s.label}>Confirm Password</label>
-              <input style={s.input} type="password" placeholder="••••••••" value={form.confirm} onChange={e => f("confirm", e.target.value)} />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={s.label}>Department</label>
-              <select style={s.input} value={form.department} onChange={e => f("department", e.target.value)}>
-                {["Sales", "Support", "Operations", "Management"].map(d => <option key={d}>{d}</option>)}
-              </select>
-            </div>
-          </>
-        )}
+        {mode === "forgot" && <div style={{ marginBottom: 24 }} />}
 
-        <button style={{ ...s.btn("primary"), width: "100%", padding: "12px", fontSize: 14, marginBottom: 14, background: "linear-gradient(135deg,#3b82f6,#8b5cf6)" }}
-          onClick={mode === "login" ? handleLogin : mode === "signup" ? handleSignup : handleForgot}>
-          {mode === "login" ? "Sign In" : mode === "signup" ? "Create Account" : "Send Reset Info"}
+        <button style={{ ...s.btn("primary"), width: "100%", padding: "12px", fontSize: 14, marginBottom: 16, background: "linear-gradient(135deg,#3b82f6,#8b5cf6)" }}
+          onClick={mode === "login" ? handleLogin : handleForgot}>
+          {mode === "login" ? "Sign In" : "Get Password Hint"}
         </button>
 
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-          {mode === "login" && <>
-            <span style={{ color: "#3b82f6", cursor: "pointer" }} onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}>Create account</span>
-            <span style={{ color: "#3b82f6", cursor: "pointer" }} onClick={() => { setMode("forgot"); setError(""); setSuccess(""); }}>Forgot password?</span>
-          </>}
-          {mode !== "login" && <span style={{ color: "#3b82f6", cursor: "pointer" }} onClick={() => { setMode("login"); setError(""); setSuccess(""); }}>← Back to sign in</span>}
+        <div style={{ textAlign: "center", fontSize: 12 }}>
+          {mode === "login"
+            ? <span style={{ color: "#3b82f6", cursor: "pointer" }} onClick={() => { setMode("forgot"); setError(""); setSuccess(""); }}>Forgot password?</span>
+            : <span style={{ color: "#3b82f6", cursor: "pointer" }} onClick={() => { setMode("login"); setError(""); setSuccess(""); }}>← Back to sign in</span>
+          }
         </div>
 
-        <div style={{ marginTop: 20, padding: "12px 14px", background: "#0f1117", borderRadius: 8, fontSize: 11, color: "#4b5a78" }}>
-          <div style={{ fontWeight: 700, color: "#8899b4", marginBottom: 4 }}>Demo credentials:</div>
-          <div>Admin: admin@company.com / admin123</div>
-          <div>Agent: maria@company.com / agent123</div>
+        <div style={{ marginTop: 24, padding: "14px", background: "#0f1117", borderRadius: 10, fontSize: 11, color: "#4b5a78", textAlign: "center", lineHeight: 1.6 }}>
+          🔒 Access is by invite only.<br />Contact your administrator to get an account.
         </div>
       </div>
     </div>
@@ -185,26 +160,28 @@ function UserManagement({ users, setUsers, currentUser }) {
   const [msg, setMsg] = useState("");
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  const save = (updated) => { setUsers(updated); storage.set("crm_users", updated); };
+
   const handleAdd = () => {
     if (!form.name || !form.email || !form.password) return setMsg("Please fill all fields.");
     if (users.find(u => u.email.toLowerCase() === form.email.toLowerCase())) return setMsg("Email already exists.");
     const initials = form.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    setUsers(prev => [...prev, { id: Date.now(), ...form, avatar: initials, status: "active", joined: today }]);
+    save([...users, { id: Date.now(), ...form, avatar: initials, status: "active", joined: today }]);
     setAddOpen(false); setForm({ name: "", email: "", password: "", role: "agent", department: "Sales", target: 40 }); setMsg("");
   };
 
   const handleEdit = () => {
     if (!editUser.name || !editUser.email) return;
     const initials = editUser.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    setUsers(prev => prev.map(u => u.id === editUser.id ? { ...editUser, avatar: initials } : u));
+    save(users.map(u => u.id === editUser.id ? { ...editUser, avatar: initials } : u));
     setEditUser(null);
   };
 
-  const handleToggle = (id) => setUsers(prev => prev.map(u => u.id === id ? { ...u, status: u.status === "active" ? "inactive" : "active" } : u));
-  const handleDelete = (id) => { if (id === currentUser.id) return; setUsers(prev => prev.filter(u => u.id !== id)); };
+  const handleToggle = (id) => save(users.map(u => u.id === id ? { ...u, status: u.status === "active" ? "inactive" : "active" } : u));
+  const handleDelete = (id) => { if (id === currentUser.id) return; save(users.filter(u => u.id !== id)); };
   const handleResetPassword = () => {
     if (!newPassword || newPassword.length < 6) return;
-    setUsers(prev => prev.map(u => u.id === resetUser.id ? { ...u, password: newPassword } : u));
+    save(users.map(u => u.id === resetUser.id ? { ...u, password: newPassword } : u));
     setResetUser(null); setNewPassword("");
   };
 
@@ -256,6 +233,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         </div>
       ))}
 
+      {/* Add User Modal */}
       {addOpen && (
         <div style={s.modal} onClick={() => setAddOpen(false)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
@@ -289,6 +267,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         </div>
       )}
 
+      {/* Edit User Modal */}
       {editUser && (
         <div style={s.modal} onClick={() => setEditUser(null)}>
           <div style={s.modalBox} onClick={e => e.stopPropagation()}>
@@ -321,6 +300,7 @@ function UserManagement({ users, setUsers, currentUser }) {
         </div>
       )}
 
+      {/* Reset Password Modal */}
       {resetUser && (
         <div style={s.modal} onClick={() => setResetUser(null)}>
           <div style={{ ...s.modalBox, width: 380 }} onClick={e => e.stopPropagation()}>
@@ -347,7 +327,7 @@ const presetAvatars = ["🧑‍💼","👩‍💼","🧑‍💻","👩‍💻","
 function ProfilePic({ user, size = 80 }) {
   if (user.photo) return <img src={user.photo} alt="avatar" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
   if (user.preset) return <div style={{ width: size, height: size, borderRadius: "50%", background: "#1e2535", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.45, flexShrink: 0 }}>{user.preset}</div>;
-  return <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{user.avatar}</div>;
+  return <div style={{ ...{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,#3b82f6,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, color: "#fff", flexShrink: 0 } }}>{user.avatar}</div>;
 }
 
 function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
@@ -364,7 +344,8 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
     if (file.size > 2 * 1024 * 1024) return setMsg(p => ({ ...p, profile: "Photo must be under 2MB." }));
     const reader = new FileReader();
     reader.onload = (ev) => {
-      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, photo: ev.target.result, preset: null } : u));
+      const updated = users.map(u => u.id === currentUser.id ? { ...u, photo: ev.target.result, preset: null } : u);
+      setUsers(updated); storage.set("crm_users", updated);
       setMsg(p => ({ ...p, profile: "✅ Photo updated!" }));
       setTimeout(() => setMsg(p => ({ ...p, profile: "" })), 3000);
     };
@@ -372,17 +353,22 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
   };
 
   const handlePreset = (emoji) => {
-    setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, preset: emoji, photo: null } : u));
+    const updated = users.map(u => u.id === currentUser.id ? { ...u, preset: emoji, photo: null } : u);
+    setUsers(updated); storage.set("crm_users", updated);
     setShowPresets(false);
     setMsg(p => ({ ...p, profile: "✅ Avatar updated!" }));
     setTimeout(() => setMsg(p => ({ ...p, profile: "" })), 3000);
   };
 
-  const removePhoto = () => setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, photo: null, preset: null } : u));
+  const removePhoto = () => {
+    const updated = users.map(u => u.id === currentUser.id ? { ...u, photo: null, preset: null } : u);
+    setUsers(updated); storage.set("crm_users", updated);
+  };
 
   const saveProfile = () => {
     const initials = form.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-    setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...form, avatar: initials } : u));
+    const updated = users.map(u => u.id === currentUser.id ? { ...u, ...form, avatar: initials } : u);
+    setUsers(updated); storage.set("crm_users", updated);
     setMsg(p => ({ ...p, profile: "✅ Profile updated!" }));
     setTimeout(() => setMsg(p => ({ ...p, profile: "" })), 3000);
   };
@@ -392,7 +378,8 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
     if (pwForm.current !== user.password) return setMsg(p => ({ ...p, pw: "Current password is incorrect." }));
     if (pwForm.newPw.length < 6) return setMsg(p => ({ ...p, pw: "New password must be at least 6 characters." }));
     if (pwForm.newPw !== pwForm.confirm) return setMsg(p => ({ ...p, pw: "Passwords do not match." }));
-    setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, password: pwForm.newPw } : u));
+    const updated = users.map(u => u.id === currentUser.id ? { ...u, password: pwForm.newPw } : u);
+    setUsers(updated); storage.set("crm_users", updated);
     setPwForm({ current: "", newPw: "", confirm: "" });
     setMsg(p => ({ ...p, pw: "✅ Password changed!" }));
     setTimeout(() => setMsg(p => ({ ...p, pw: "" })), 3000);
@@ -400,6 +387,7 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
 
   return (
     <div style={{ maxWidth: 560 }}>
+      {/* Profile Header */}
       <div style={{ ...s.card, display: "flex", gap: 20, alignItems: "center", marginBottom: 24 }}>
         <div style={{ position: "relative" }}>
           <ProfilePic user={me} size={80} />
@@ -414,6 +402,7 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
         </div>
       </div>
 
+      {/* Photo Upload */}
       <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 16 }}>🖼️ Profile Picture</div>
         {msg.profile && <div style={{ background: msg.profile.startsWith("✅") ? "#10b98122" : "#ef444422", border: `1px solid ${msg.profile.startsWith("✅") ? "#10b981" : "#ef4444"}`, borderRadius: 8, padding: "10px", marginBottom: 14, fontSize: 12, color: msg.profile.startsWith("✅") ? "#10b981" : "#ef4444" }}>{msg.profile}</div>}
@@ -434,6 +423,7 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
         <div style={{ fontSize: 12, color: "#4b5a78", marginTop: 12 }}>Supported: JPG, PNG, GIF · Max 2MB</div>
       </div>
 
+      {/* Edit Profile */}
       <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 18 }}>Edit Profile</div>
         {[["Full Name", "name", "text"], ["Email", "email", "email"]].map(([label, key, type]) => (
@@ -448,6 +438,7 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
         <button style={s.btn("primary")} onClick={saveProfile}>Save Profile</button>
       </div>
 
+      {/* Change Password */}
       <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 18 }}>Change Password</div>
         {msg.pw && <div style={{ background: msg.pw.startsWith("✅") ? "#10b98122" : "#ef444422", border: `1px solid ${msg.pw.startsWith("✅") ? "#10b981" : "#ef4444"}`, borderRadius: 8, padding: "10px", marginBottom: 14, fontSize: 12, color: msg.pw.startsWith("✅") ? "#10b981" : "#ef4444" }}>{msg.pw}</div>}
@@ -457,6 +448,7 @@ function ProfileSettings({ currentUser, users, setUsers, onLogout }) {
         <button style={s.btn("primary")} onClick={savePassword}>Update Password</button>
       </div>
 
+      {/* Sign Out */}
       <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Account</div>
         <div style={{ fontSize: 13, color: "#4b5a78", marginBottom: 16 }}>Signed in as {me.email}</div>
@@ -517,6 +509,7 @@ function ScriptsLibrary({ scripts, setScripts, isAdmin }) {
         {isAdmin && <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#3b82f6,#8b5cf6)" }} onClick={() => { setAddOpen(true); setEditScript(null); setForm({ title: "", category: "Call Script", content: "", tags: "" }); }}>+ Add Script</button>}
       </div>
 
+      {/* Search + Filter */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <input style={{ ...s.input, maxWidth: 260 }} placeholder="🔍 Search scripts…" value={search} onChange={e => setSearch(e.target.value)} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -525,6 +518,7 @@ function ScriptsLibrary({ scripts, setScripts, isAdmin }) {
         <span style={{ fontSize: 12, color: "#4b5a78", marginLeft: "auto" }}>{filtered.length} scripts</span>
       </div>
 
+      {/* Script Cards */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {filtered.length === 0 && <div style={{ textAlign: "center", padding: "48px 0", color: "#4b5a78" }}><div style={{ fontSize: 36, marginBottom: 10 }}>📭</div><div>No scripts found.</div></div>}
         {filtered.map(sc => {
@@ -549,6 +543,7 @@ function ScriptsLibrary({ scripts, setScripts, isAdmin }) {
                     <button onClick={() => setExpanded(isExp ? null : sc.id)} style={{ ...s.btn("ghost"), padding: "6px 10px", fontSize: 14 }}>{isExp ? "▲" : "▼"}</button>
                   </div>
                 </div>
+
                 {isExp && (
                   <div style={{ background: "#0f1117", borderRadius: 10, padding: "16px 18px", whiteSpace: "pre-wrap", fontSize: 13, color: "#c8d4e8", lineHeight: 1.8, fontFamily: "monospace" }}>
                     {sc.content}
@@ -560,6 +555,7 @@ function ScriptsLibrary({ scripts, setScripts, isAdmin }) {
         })}
       </div>
 
+      {/* Add/Edit Modal */}
       {(addOpen || editScript) && (
         <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => { setAddOpen(false); setEditScript(null); }}>
           <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 560, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
@@ -596,7 +592,7 @@ function ScriptsLibrary({ scripts, setScripts, isAdmin }) {
 }
 
 // ── Mini SVG Charts ────────────────────────────────────────
-function LineChart({ data, color = "#3b82f6", valueKey = "revenue" }) {
+function LineChart({ data, color = "#3b82f6", valueKey = "revenue", label = "Revenue" }) {
   const vals = data.map(d => d[valueKey]);
   const max = Math.max(...vals) || 1;
   const min = Math.min(...vals);
@@ -654,6 +650,8 @@ function TransferredLeads({ transfers, setTransfers, currentUser, users, perform
   const [form, setForm] = useState({ firstName: "", lastName: "", phone: "", state: "", hasLoan: false, agreedService: false, monthlyPayment: "250" });
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  const agents = users.filter(u => u.role === "agent");
+
   const handleSubmit = () => {
     if (!form.firstName || !form.lastName || !form.phone || !form.state) return alert("Please fill in all required fields.");
     const newTransfer = {
@@ -662,27 +660,31 @@ function TransferredLeads({ transfers, setTransfers, currentUser, users, perform
       hasLoan: form.hasLoan, agreedService: form.agreedService, monthlyPayment: parseFloat(form.monthlyPayment) || 250,
       status: "Pending", date: today, time: new Date().toLocaleTimeString(), reviewedBy: null, reviewNote: ""
     };
-    setTransfers(prev => [newTransfer, ...prev]);
+    const updated = [newTransfer, ...transfers];
+    setTransfers(updated); storage.set("crm_transfers", updated);
     setSubmitOpen(false);
     setForm({ firstName: "", lastName: "", phone: "", state: "", hasLoan: false, agreedService: false, monthlyPayment: "250" });
   };
 
   const handleTag = (id, status) => {
-    setTransfers(prev => prev.map(t => {
+    const updated = transfers.map(t => {
       if (t.id !== id) return t;
       const tagged = { ...t, status, reviewedBy: currentUser.name };
       if (status === "Successful") {
+        // Auto-add to agent's daily performance
         setPerformance(prev => {
           const agentPerf = prev[t.agentId] || { calls: 0, deals: 0, revenue: 0, tasks: 0 };
           return { ...prev, [t.agentId]: { ...agentPerf, deals: agentPerf.deals + 1, revenue: agentPerf.revenue + (t.monthlyPayment * 12) } };
         });
       }
       return tagged;
-    }));
+    });
+    setTransfers(updated); storage.set("crm_transfers", updated);
   };
 
   const myTransfers = isAdmin ? transfers : transfers.filter(t => t.agentId === currentUser.id);
   const filtered = myTransfers.filter(t => filterStatus === "All" || t.status === filterStatus);
+
   const statusColor = { Pending: "#f59e0b", Successful: "#10b981", Unsuccessful: "#ef4444" };
 
   return (
@@ -695,6 +697,7 @@ function TransferredLeads({ transfers, setTransfers, currentUser, users, perform
         {!isAdmin && <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#10b981,#3b82f6)" }} onClick={() => setSubmitOpen(true)}>+ Submit Transfer</button>}
       </div>
 
+      {/* Stats row */}
       <div style={s.grid4}>
         {[
           { l: "Total Submitted", v: myTransfers.length, c: "#60a5fa", i: "📋" },
@@ -710,12 +713,14 @@ function TransferredLeads({ transfers, setTransfers, currentUser, users, perform
         ))}
       </div>
 
+      {/* Filter */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {["All", "Pending", "Successful", "Unsuccessful"].map(st => (
           <button key={st} onClick={() => setFilterStatus(st)} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterStatus === st ? (statusColor[st] || "#3b82f6") : "#1e2535", color: filterStatus === st ? "#fff" : "#8899b4" }}>{st}</button>
         ))}
       </div>
 
+      {/* Table */}
       <div style={s.card}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: "#4b5a78" }}>
@@ -755,11 +760,13 @@ function TransferredLeads({ transfers, setTransfers, currentUser, users, perform
         )}
       </div>
 
+      {/* Submit Modal */}
       {submitOpen && (
         <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setSubmitOpen(false)}>
           <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 500, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 6 }}>🔄 Submit Transferred Lead</div>
             <div style={{ fontSize: 13, color: "#4b5a78", marginBottom: 20 }}>Fill in the lead's information for management review</div>
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
               <div><label style={s.label}>First Name *</label><input style={s.input} placeholder="John" value={form.firstName} onChange={e => f("firstName", e.target.value)} /></div>
               <div><label style={s.label}>Last Name *</label><input style={s.input} placeholder="Smith" value={form.lastName} onChange={e => f("lastName", e.target.value)} /></div>
@@ -773,6 +780,7 @@ function TransferredLeads({ transfers, setTransfers, currentUser, users, perform
               <input style={s.input} type="number" value={form.monthlyPayment} onChange={e => f("monthlyPayment", e.target.value)} />
               <div style={{ fontSize: 11, color: "#4b5a78", marginTop: 4 }}>Default: $250/month</div>
             </div>
+
             <div style={{ background: "#0f1117", borderRadius: 12, padding: "16px", marginBottom: 20 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 12 }}>Lead Qualifications</div>
               <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 12 }}>
@@ -784,6 +792,7 @@ function TransferredLeads({ transfers, setTransfers, currentUser, users, perform
                 <div><div style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 600 }}>Agreed to Our Service</div><div style={{ fontSize: 11, color: "#4b5a78" }}>Lead agreed to pay ${form.monthlyPayment}/month</div></div>
               </label>
             </div>
+
             <div style={{ display: "flex", gap: 10 }}>
               <button style={s.btn("secondary")} onClick={() => setSubmitOpen(false)}>Cancel</button>
               <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#10b981,#3b82f6)", flex: 1 }} onClick={handleSubmit}>Submit Transfer</button>
@@ -803,8 +812,6 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
   const [filterAgent, setFilterAgent] = useState("All");
   const [form, setForm] = useState({ agentId: "", topic: "", notes: "", actionItems: "", rating: "3" });
   const agents = users.filter(u => u.role === "agent");
-  const ratingColors = { 1: "#ef4444", 2: "#f59e0b", 3: "#3b82f6", 4: "#8b5cf6", 5: "#10b981" };
-  const ratingLabels = { 1: "Needs Improvement", 2: "Below Average", 3: "Average", 4: "Good", 5: "Excellent" };
 
   const handleAdd = () => {
     if (!form.agentId || !form.topic) return alert("Please select an agent and add a topic.");
@@ -815,7 +822,8 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
       actionItems: form.actionItems.split("\n").filter(Boolean),
       rating: parseInt(form.rating), date: today, comments: []
     };
-    setCoaching(prev => [session, ...prev]);
+    const updated = [session, ...coaching];
+    setCoaching(updated); storage.set("crm_coaching", updated);
     setAddOpen(false);
     setForm({ agentId: "", topic: "", notes: "", actionItems: "", rating: "3" });
   };
@@ -823,12 +831,15 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
   const handleComment = (sessionId) => {
     const text = commentText[sessionId]?.trim();
     if (!text) return;
-    setCoaching(prev => prev.map(c => c.id !== sessionId ? c : { ...c, comments: [...c.comments, { author: currentUser.name, avatar: currentUser.avatar, text, date: today }] }));
+    const updated = coaching.map(c => c.id !== sessionId ? c : { ...c, comments: [...c.comments, { author: currentUser.name, avatar: currentUser.avatar, text, date: today }] });
+    setCoaching(updated); storage.set("crm_coaching", updated);
     setCommentText(p => ({ ...p, [sessionId]: "" }));
   };
 
   const myCoaching = isAdmin ? coaching : coaching.filter(c => c.agentId === currentUser.id);
   const filtered = myCoaching.filter(c => filterAgent === "All" || c.agentId === parseInt(filterAgent));
+  const ratingColors = { 1: "#ef4444", 2: "#f59e0b", 3: "#3b82f6", 4: "#8b5cf6", 5: "#10b981" };
+  const ratingLabels = { 1: "Needs Improvement", 2: "Below Average", 3: "Average", 4: "Good", 5: "Excellent" };
 
   return (
     <div>
@@ -840,6 +851,7 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
         {isAdmin && <button style={{ ...s.btn("primary"), background: "linear-gradient(135deg,#8b5cf6,#3b82f6)" }} onClick={() => setAddOpen(true)}>+ Add Session</button>}
       </div>
 
+      {/* Filter by agent (admin only) */}
       {isAdmin && (
         <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           <button onClick={() => setFilterAgent("All")} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterAgent === "All" ? "#3b82f6" : "#1e2535", color: filterAgent === "All" ? "#fff" : "#8899b4" }}>All Agents</button>
@@ -860,6 +872,7 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
           return (
             <div key={session.id} style={{ background: "#161b27", borderRadius: 16, border: "1px solid #1e2535", overflow: "hidden" }}>
               <div style={{ padding: "20px 24px" }}>
+                {/* Header */}
                 <div style={{ display: "flex", gap: 14, marginBottom: 14, alignItems: "flex-start" }}>
                   <div style={{ width: 46, height: 46, borderRadius: "50%", background: "linear-gradient(135deg,#8b5cf6,#3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{session.agentAvatar}</div>
                   <div style={{ flex: 1 }}>
@@ -877,12 +890,14 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
 
                 {isExp && (
                   <div>
+                    {/* Notes */}
                     {session.notes && (
                       <div style={{ background: "#0f1117", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#4b5a78", marginBottom: 8 }}>📝 SESSION NOTES</div>
                         <div style={{ fontSize: 13, color: "#c8d4e8", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{session.notes}</div>
                       </div>
                     )}
+                    {/* Action Items */}
                     {session.actionItems?.length > 0 && (
                       <div style={{ background: "#0f1117", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#4b5a78", marginBottom: 8 }}>✅ ACTION ITEMS</div>
@@ -893,6 +908,7 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
                         ))}
                       </div>
                     )}
+                    {/* Comments */}
                     <div style={{ borderTop: "1px solid #1e2535", paddingTop: 16 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#4b5a78", marginBottom: 12 }}>COMMENTS</div>
                       {session.comments.length === 0 && <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>No comments yet.</div>}
@@ -919,10 +935,12 @@ function CoachingSessions({ coaching, setCoaching, currentUser, users, isAdmin }
         })}
       </div>
 
+      {/* Add Session Modal */}
       {addOpen && (
         <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setAddOpen(false)}>
           <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 540, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 20 }}>🎓 New Coaching Session</div>
+
             <div style={{ marginBottom: 14 }}>
               <label style={s.label}>Agent *</label>
               <select style={s.input} value={form.agentId} onChange={e => setForm(p => ({ ...p, agentId: e.target.value }))}>
@@ -1106,14 +1124,6 @@ function FreedomBoard({ boardPosts, setBoardPosts, currentUser, isAdmin }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         {categories.map(cat => <button key={cat} onClick={() => setFilterCat(cat)} style={{ padding: "7px 14px", borderRadius: 20, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: filterCat === cat ? (catColors[cat] || "#3b82f6") : "#1e2535", color: filterCat === cat ? "#fff" : "#8899b4" }}>{cat !== "All" ? catIcons[cat] + " " : ""}{cat}</button>)}
       </div>
-
-      {filtered.length === 0 && (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "#4b5a78" }}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>📌</div>
-          <div style={{ fontSize: 14 }}>No posts yet. Be the first to share something with the team!</div>
-        </div>
-      )}
-
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {filtered.map(post => {
           const isExp = expandedPost === post.id;
@@ -1157,7 +1167,6 @@ function FreedomBoard({ boardPosts, setBoardPosts, currentUser, isAdmin }) {
           );
         })}
       </div>
-
       {newPostOpen && (
         <div style={{ position: "fixed", inset: 0, background: "#000b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }} onClick={() => setNewPostOpen(false)}>
           <div style={{ background: "#161b27", borderRadius: 20, border: "1px solid #1e2535", padding: 32, width: 500 }} onClick={e => e.stopPropagation()}>
@@ -1183,14 +1192,16 @@ function FreedomBoard({ boardPosts, setBoardPosts, currentUser, isAdmin }) {
 
 // ── MAIN APP ───────────────────────────────────────────────
 export default function CRM() {
-  const [users, setUsers] = useState(initialUsers);
-  const [leads, setLeads] = useState(initialLeads);
-  const [attendance, setAttendance] = useState(initialAttendance);
+  const [users, setUsers] = useState(() => storage.get("crm_users", initialUsers));
+  const [leads, setLeads] = useState(() => storage.get("crm_leads", initialLeads));
+  const [attendance, setAttendance] = useState(() => storage.get("crm_attendance", initialAttendance));
   const [performance, setPerformance] = useState(initialPerformance);
-  const [boardPosts, setBoardPosts] = useState([]);
-  const [scripts, setScripts] = useState(initialScripts);
-  const [transfers, setTransfers] = useState([]);
-  const [coaching, setCoaching] = useState([]);
+  const [boardPosts, setBoardPosts] = useState(() => storage.get("crm_board", initialBoardPosts));
+  const [scripts, setScripts] = useState(() => storage.get("crm_scripts", initialScripts));
+  const [transfers, setTransfers] = useState(() => storage.get("crm_transfers", initialTransfers));
+  const [coaching, setCoaching] = useState(() => storage.get("crm_coaching", initialCoaching));
+  const [agentStatuses, setAgentStatuses] = useState(() => storage.get("crm_statuses", {}));
+  const [myStatus, setMyStatus] = useState("Online");
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [clockedIn, setClockedIn] = useState(false);
@@ -1204,9 +1215,36 @@ export default function CRM() {
   const [showNotif, setShowNotif] = useState(false);
 
   useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { storage.set("crm_leads", leads); }, [leads]);
+  useEffect(() => { storage.set("crm_board", boardPosts); }, [boardPosts]);
+  useEffect(() => { storage.set("crm_attendance", attendance); }, [attendance]);
+  useEffect(() => { storage.set("crm_scripts", scripts); }, [scripts]);
+  useEffect(() => { storage.set("crm_transfers", transfers); }, [transfers]);
+  useEffect(() => { storage.set("crm_coaching", coaching); }, [coaching]);
 
-  const handleLogin = (user) => { setCurrentUser(user); setActiveTab("dashboard"); };
-  const handleLogout = () => { setCurrentUser(null); setClockedIn(false); setClockTime(null); };
+  const handleLogin = (user) => { setCurrentUser(user); setMyStatus("Online"); setActiveTab("dashboard"); };
+  const handleLogout = () => {
+    if (currentUser) {
+      const statuses = storage.get("crm_statuses", {});
+      statuses[currentUser.id] = { status: "Offline", name: currentUser.name, avatar: currentUser.avatar, ts: Date.now() };
+      storage.set("crm_statuses", statuses);
+    }
+    setCurrentUser(null); setClockedIn(false); setClockTime(null); setMyStatus("Online");
+  };
+
+  // Broadcast status every 5s
+  useEffect(() => {
+    if (!currentUser) return;
+    const broadcast = () => {
+      const statuses = storage.get("crm_statuses", {});
+      statuses[currentUser.id] = { status: myStatus, name: currentUser.name, avatar: currentUser.avatar, ts: Date.now() };
+      storage.set("crm_statuses", statuses);
+      setAgentStatuses({ ...statuses });
+    };
+    broadcast();
+    const t = setInterval(() => { broadcast(); setAgentStatuses({ ...storage.get("crm_statuses", {}) }); }, 5000);
+    return () => clearInterval(t);
+  }, [currentUser, myStatus]);
 
   const handleClockIn = () => {
     const now = currentTime.toTimeString().slice(0, 5);
@@ -1243,11 +1281,11 @@ export default function CRM() {
   const totalRev = Object.values(performance).reduce((s, p) => s + p.revenue, 0);
   const totalDeals = Object.values(performance).reduce((s, p) => s + p.deals, 0);
 
-  const adminTabs = ["dashboard", "overview", "leads", "agents", "transfers", "attendance", "performance", "coaching", "automations", "board", "scripts", "users", "settings"];
+  const adminTabs = ["dashboard", "overview", "realtime", "leads", "agents", "transfers", "attendance", "performance", "coaching", "automations", "board", "scripts", "users", "settings"];
   const agentTabs = ["dashboard", "my-leads", "my-attendance", "my-performance", "transfers", "coaching", "board", "scripts", "settings"];
   const tabs = isAdmin ? adminTabs : agentTabs;
-  const tabLabels = { dashboard: "Dashboard", overview: "Agent Overview", leads: "Leads", agents: "Team", transfers: "Transfers", attendance: "Attendance", performance: "Performance", coaching: "Coaching", automations: "Automations", board: "Freedom Board", scripts: "Scripts Library", users: "User Management", settings: "My Profile", "my-leads": "My Leads", "my-attendance": "My Attendance", "my-performance": "My Performance" };
-  const tabIcons = { dashboard: "📊", overview: "🪪", leads: "🎯", agents: "👥", transfers: "🔄", attendance: "🕐", performance: "📈", coaching: "🎓", automations: "⚙️", board: "📌", scripts: "📋", users: "👤", settings: "⚙️", "my-leads": "🎯", "my-attendance": "🕐", "my-performance": "📈" };
+  const tabLabels = { dashboard: "Dashboard", overview: "Agent Overview", realtime: "Live Monitor", leads: "Leads", agents: "Team", transfers: "Transfers", attendance: "Attendance", performance: "Performance", coaching: "Coaching", automations: "Automations", board: "Freedom Board", scripts: "Scripts Library", users: "User Management", settings: "My Profile", "my-leads": "My Leads", "my-attendance": "My Attendance", "my-performance": "My Performance" };
+  const tabIcons = { dashboard: "📊", overview: "🪪", realtime: "🟢", leads: "🎯", agents: "👥", transfers: "🔄", attendance: "🕐", performance: "📈", coaching: "🎓", automations: "⚙️", board: "📌", scripts: "📋", users: "👤", settings: "⚙️", "my-leads": "🎯", "my-attendance": "🕐", "my-performance": "📈" };
 
   const notifications = [
     { id: 1, text: "New lead assigned to you", type: "info", time: "09:00" },
@@ -1256,12 +1294,87 @@ export default function CRM() {
   ];
 
   const renderContent = () => {
+    const statusDot = { Online: "#10b981", "On Break": "#f59e0b", Offline: "#ef4444" };
+
+    if (activeTab === "realtime") {
+      const now = Date.now();
+      const allAgents = users.filter(u => u.role === "agent");
+      return (
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4 }}>🟢 Live Monitor</div>
+          <div style={{ fontSize: 13, color: "#4b5a78", marginBottom: 20 }}>Real-time agent status — refreshes every 5 seconds</div>
+
+          {/* Summary Row */}
+          <div style={s.grid4}>
+            {[
+              { l: "Online", v: allAgents.filter(a => { const st = agentStatuses[a.id]; return st && st.status === "Online" && (now - st.ts) < 30000; }).length, c: "#10b981", i: "🟢" },
+              { l: "On Break", v: allAgents.filter(a => { const st = agentStatuses[a.id]; return st && st.status === "On Break" && (now - st.ts) < 30000; }).length, c: "#f59e0b", i: "🟡" },
+              { l: "Offline", v: allAgents.filter(a => { const st = agentStatuses[a.id]; return !st || st.status === "Offline" || (now - st.ts) >= 30000; }).length, c: "#ef4444", i: "🔴" },
+              { l: "Total Agents", v: allAgents.length, c: "#60a5fa", i: "👥" },
+            ].map((stat, i) => (
+              <div key={i} style={s.statCard}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{stat.i}</div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: stat.c }}>{stat.v}</div>
+                <div style={{ fontSize: 12, color: "#4b5a78", marginTop: 4 }}>{stat.l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Agent Status Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+            {allAgents.map(agent => {
+              const st = agentStatuses[agent.id];
+              const isRecent = st && (now - st.ts) < 30000;
+              const status = isRecent ? st.status : "Offline";
+              const lastSeen = st ? new Date(st.ts).toLocaleTimeString() : "Never";
+              const todayAtt = (attendance[agent.id] || []).find(r => r.date === today);
+              const perf = performance[agent.id] || {};
+              return (
+                <div key={agent.id} style={{ background: "#161b27", borderRadius: 16, border: `1px solid ${status === "Online" ? "#10b98144" : status === "On Break" ? "#f59e0b44" : "#1e2535"}`, padding: 20 }}>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+                    <div style={{ position: "relative" }}>
+                      <ProfilePic user={users.find(u => u.id === agent.id) || agent} size={44} />
+                      <div style={{ position: "absolute", bottom: 0, right: 0, width: 12, height: 12, borderRadius: "50%", background: statusDot[status] || "#ef4444", border: "2px solid #161b27" }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: "#fff", fontSize: 14 }}>{agent.name}</div>
+                      <div style={{ fontSize: 11, color: "#4b5a78" }}>{agent.department}</div>
+                    </div>
+                    <span style={s.badge(statusDot[status] || "#ef4444")}>{status}</span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div style={{ background: "#0f1117", borderRadius: 8, padding: "8px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#4b5a78" }}>Today's Att.</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: todayAtt ? attColors[todayAtt.status] : "#ef4444", marginTop: 2 }}>{todayAtt?.status || "Not clocked in"}</div>
+                    </div>
+                    <div style={{ background: "#0f1117", borderRadius: 8, padding: "8px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#4b5a78" }}>Clock In</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#c8d4e8", marginTop: 2 }}>{todayAtt?.in || "—"}</div>
+                    </div>
+                    <div style={{ background: "#0f1117", borderRadius: 8, padding: "8px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#4b5a78" }}>Deals Today</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#10b981", marginTop: 2 }}>{perf.deals || 0}</div>
+                    </div>
+                    <div style={{ background: "#0f1117", borderRadius: 8, padding: "8px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#4b5a78" }}>Last Seen</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#c8d4e8", marginTop: 2 }}>{isRecent ? "Just now" : lastSeen}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
     if (activeTab === "board") return <FreedomBoard boardPosts={boardPosts} setBoardPosts={setBoardPosts} currentUser={currentUser} isAdmin={isAdmin} />;
     if (activeTab === "overview") return <AgentOverview agents={agents} performance={performance} attendance={attendance} leads={leads} />;
     if (activeTab === "scripts") return <ScriptsLibrary scripts={scripts} setScripts={setScripts} isAdmin={isAdmin} />;
     if (activeTab === "transfers") return <TransferredLeads transfers={transfers} setTransfers={setTransfers} currentUser={currentUser} users={users} performance={performance} setPerformance={setPerformance} isAdmin={isAdmin} />;
     if (activeTab === "coaching") return <CoachingSessions coaching={coaching} setCoaching={setCoaching} currentUser={currentUser} users={users} isAdmin={isAdmin} />;
-    if (activeTab === "users") return <UserManagement users={users} setUsers={setUsers} currentUser={currentUser} />;
+    if (activeTab === "users") return isAdmin ? <UserManagement users={users} setUsers={setUsers} currentUser={currentUser} /> : <div style={{ textAlign: "center", padding: "80px 0", color: "#4b5a78" }}><div style={{ fontSize: 40 }}>🔒</div><div style={{ marginTop: 12 }}>Admin access only.</div></div>;
     if (activeTab === "settings") return <ProfileSettings currentUser={currentUser} users={users} setUsers={setUsers} onLogout={handleLogout} />;
 
     if (isAdmin) {
@@ -1273,6 +1386,7 @@ export default function CRM() {
             ))}
           </div>
 
+          {/* Charts Row */}
           <div style={s.grid2}>
             <div style={s.card}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>📈 Revenue Trend (This Week)</div>
@@ -1289,25 +1403,18 @@ export default function CRM() {
             </div>
           </div>
 
-          <div style={s.grid2}>
-            <div style={s.card}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>🤝 Deals Trend</div>
-              <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>Daily deals closed this week</div>
+          {/* Deals Trend */}
+          <div style={s.card}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>🤝 Deals & Calls Trend</div>
+            <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>Daily deals closed (blue) and calls made (purple)</div>
+            <div style={{ position: "relative" }}>
               <LineChart data={initialTrendData} color="#10b981" valueKey="deals" />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                {initialTrendData.map((d, i) => <span key={i} style={{ fontSize: 10, color: "#4b5a78", flex: 1, textAlign: "center" }}>{d.day}</span>)}
-              </div>
             </div>
-            <div style={s.card}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>📞 Calls Trend</div>
-              <div style={{ fontSize: 12, color: "#4b5a78", marginBottom: 12 }}>Daily calls made this week</div>
-              <LineChart data={initialTrendData} color="#8b5cf6" valueKey="calls" />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-                {initialTrendData.map((d, i) => <span key={i} style={{ fontSize: 10, color: "#4b5a78", flex: 1, textAlign: "center" }}>{d.day}</span>)}
-              </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+              <span style={{ fontSize: 11, color: "#10b981" }}>● Deals</span>
+              <span style={{ fontSize: 11, color: "#8b5cf6" }}>● Calls</span>
             </div>
           </div>
-
           <div style={s.grid2}>
             <div style={s.card}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 16 }}>Lead Pipeline</div>
@@ -1325,7 +1432,6 @@ export default function CRM() {
               ))}
             </div>
           </div>
-
           <div style={s.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>🤖 AI Team Insight</div>
@@ -1335,7 +1441,6 @@ export default function CRM() {
           </div>
         </div>
       );
-
       if (activeTab === "leads") return (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
@@ -1360,7 +1465,6 @@ export default function CRM() {
           </div>
         </div>
       );
-
       if (activeTab === "agents") return (
         <div style={s.grid2}>
           {agents.map(agent => { const perf = performance[agent.id] || {}; const attRecs = attendance[agent.id] || []; const present = attRecs.filter(r => r.status === "Present" || r.status === "Late").length; return (
@@ -1375,7 +1479,6 @@ export default function CRM() {
           ); })}
         </div>
       );
-
       if (activeTab === "attendance") return (
         <div style={s.card}>
           <table style={s.table}>
@@ -1390,7 +1493,6 @@ export default function CRM() {
           </table>
         </div>
       );
-
       if (activeTab === "performance") return (
         <div style={s.card}>
           <table style={s.table}>
@@ -1407,7 +1509,6 @@ export default function CRM() {
           </table>
         </div>
       );
-
       if (activeTab === "automations") return (
         <div>{[{ icon: "📧", name: "Follow-up Reminder", desc: "Auto-remind agents when a lead hasn't been contacted in 3 days", status: "Active" }, { icon: "⚠️", name: "Late Attendance Alert", desc: "Notify admin when an agent clocks in after 08:15", status: "Active" }, { icon: "🏆", name: "Deal Won Celebration", desc: "Post to team channel when a deal is closed", status: "Active" }, { icon: "📊", name: "Weekly Performance Report", desc: "Send performance summary every Monday 8AM", status: "Active" }, { icon: "🔁", name: "Lead Reassignment", desc: "Auto-reassign leads if agent is absent 2+ days", status: "Inactive" }].map((r, i) => (
           <div key={i} style={{ ...s.card, display: "flex", alignItems: "center", gap: 16 }}><div style={{ fontSize: 28 }}>{r.icon}</div><div style={{ flex: 1 }}><div style={{ fontWeight: 700, color: "#fff", fontSize: 14 }}>{r.name}</div><div style={{ fontSize: 12, color: "#4b5a78", marginTop: 3 }}>{r.desc}</div></div><span style={s.badge(r.status === "Active" ? "#10b981" : "#4b5a78")}>{r.status}</span></div>
@@ -1418,8 +1519,21 @@ export default function CRM() {
         <div>
           <div style={{ ...s.card, display: "flex", alignItems: "center", gap: 20, marginBottom: 20 }}>
             <div style={s.avatar(56)}>{currentUser.avatar}</div>
-            <div style={{ flex: 1 }}><div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>Welcome, {currentUser.name.split(" ")[0]}!</div><div style={{ fontSize: 13, color: "#4b5a78" }}>{currentTime.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div><div style={{ fontSize: 20, fontWeight: 700, color: "#60a5fa", marginTop: 4 }}>{currentTime.toLocaleTimeString()}</div></div>
-            <div>{!clockedIn ? <button style={{ ...s.btn("success"), background: "#10b981" }} onClick={handleClockIn}>🟢 Clock In</button> : <button style={s.btn("danger")} onClick={handleClockOut}>🔴 Clock Out</button>}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>Welcome, {currentUser.name.split(" ")[0]}!</div>
+              <div style={{ fontSize: 13, color: "#4b5a78" }}>{currentTime.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "#60a5fa", marginTop: 4 }}>{currentTime.toLocaleTimeString()}</div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                {["Online", "On Break", "Offline"].map(st => (
+                  <button key={st} onClick={() => setMyStatus(st)} style={{ padding: "6px 12px", borderRadius: 20, border: `1px solid ${myStatus === st ? { Online: "#10b981", "On Break": "#f59e0b", Offline: "#ef4444" }[st] : "#1e2535"}`, background: myStatus === st ? { Online: "#10b98122", "On Break": "#f59e0b22", Offline: "#ef444422" }[st] : "transparent", cursor: "pointer", fontSize: 11, fontWeight: 600, color: myStatus === st ? { Online: "#10b981", "On Break": "#f59e0b", Offline: "#ef4444" }[st] : "#4b5a78" }}>
+                    {st === "Online" ? "🟢" : st === "On Break" ? "🟡" : "🔴"} {st}
+                  </button>
+                ))}
+              </div>
+              <div>{!clockedIn ? <button style={{ ...s.btn("success"), background: "#10b981" }} onClick={handleClockIn}>🟢 Clock In</button> : <button style={s.btn("danger")} onClick={handleClockOut}>🔴 Clock Out</button>}</div>
+            </div>
           </div>
           {clockedIn && <div style={{ ...s.card, background: "#0d2a1a", borderColor: "#10b981", marginBottom: 20 }}><div style={{ fontSize: 13, color: "#10b981" }}>✅ Clocked in at <strong>{clockTime}</strong>. Have a great day!</div></div>}
           <div style={s.grid4}>
@@ -1469,7 +1583,9 @@ export default function CRM() {
             <ProfilePic user={users.find(u => u.id === currentUser.id) || currentUser} size={32} />
             <div style={{ flex: 1, overflow: "hidden" }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#c8d4e8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
-              <div style={{ fontSize: 10, color: "#4b5a78" }}>{isAdmin ? "Administrator" : "Agent"}</div>
+              <div style={{ fontSize: 10, color: { Online: "#10b981", "On Break": "#f59e0b", Offline: "#ef4444" }[myStatus] || "#4b5a78", display: "flex", alignItems: "center", gap: 4 }}>
+                <span>●</span>{isAdmin ? "Administrator" : myStatus}
+              </div>
             </div>
             <button onClick={handleLogout} title="Sign out" style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 16, color: "#4b5a78" }}>🚪</button>
           </div>
