@@ -670,6 +670,95 @@ function AgentOverview({ agents, performance, attendance, leads }) {
   );
 }
 
+function Newsletter({ isAdmin, currentUser }) {
+  const [posts, setPosts] = useState([]); const [loading, setLoading] = useState(true);
+  const [addOpen, setAddOpen] = useState(false); const [editPost, setEditPost] = useState(null);
+  const [form, setForm] = useState({ title:"", body:"", image:null });
+  const load = async () => { setLoading(true); const d=await db.get("newsletter","order=id.desc"); setPosts(d||[]); setLoading(false); };
+  useEffect(()=>{load();},[]);
+
+  const handleImage = (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    if(file.size > 5*1024*1024) return alert("Image must be under 5MB.");
+    const reader = new FileReader();
+    reader.onload = (ev) => setForm(p=>({...p, image:ev.target.result}));
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async () => {
+    if(!form.title.trim()) return alert("Please add a title.");
+    if(editPost) {
+      await db.patch("newsletter",`id=eq.${editPost.id}`,{ title:form.title, body:form.body, image:form.image, updated_at:new Date().toISOString() });
+      setEditPost(null);
+    } else {
+      await db.post("newsletter",{ title:form.title, body:form.body, image:form.image, author:currentUser.name, created_at:new Date().toISOString() });
+      setAddOpen(false);
+    }
+    setForm({title:"",body:"",image:null}); load();
+  };
+
+  const handleDelete = async (id) => { await db.del("newsletter",`id=eq.${id}`); load(); };
+
+  const openEdit = (post) => { setEditPost(post); setForm({title:post.title,body:post.body,image:post.image}); };
+
+  if(loading) return <div style={{padding:60,textAlign:"center",color:"#4b5a78"}}>Loading...</div>;
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:22,fontWeight:800,color:"#fff"}}>📰 Newsletter</div>
+          <div style={{fontSize:13,color:"#4b5a78",marginTop:3}}>Team updates, announcements and news from management</div>
+        </div>
+        {isAdmin&&<button style={{...s.btn("primary"),background:"linear-gradient(135deg,#3b82f6,#8b5cf6)"}} onClick={()=>{setAddOpen(true);setEditPost(null);setForm({title:"",body:"",image:null});}}>+ New Post</button>}
+      </div>
+
+      {posts.length===0&&<div style={{textAlign:"center",padding:"60px 0",color:"#4b5a78"}}><div style={{fontSize:40,marginBottom:10}}>📰</div><div>{isAdmin?"No newsletter posts yet. Create your first one!":"No newsletter posts yet."}</div></div>}
+
+      <div style={{display:"flex",flexDirection:"column",gap:18}}>
+        {posts.map(post=>(
+          <div key={post.id} style={{background:"#161b27",borderRadius:16,border:"1px solid #1e2535",overflow:"hidden"}}>
+            {post.image&&<img src={post.image} alt="newsletter" style={{width:"100%",maxHeight:380,objectFit:"cover",display:"block"}}/>}
+            <div style={{padding:"22px 26px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10}}>
+                <div>
+                  <div style={{fontSize:20,fontWeight:800,color:"#fff",marginBottom:4}}>{post.title}</div>
+                  <div style={{fontSize:12,color:"#4b5a78"}}>Posted by <span style={{color:"#c8d4e8"}}>{post.author}</span> · {post.created_at ? new Date(post.created_at).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : ""}</div>
+                </div>
+                {isAdmin&&<div style={{display:"flex",gap:8,flexShrink:0}}>
+                  <button onClick={()=>openEdit(post)} style={{...s.btn("secondary"),padding:"6px 12px",fontSize:12}}>✏️ Edit</button>
+                  <button onClick={()=>handleDelete(post.id)} style={{...s.btn("danger"),padding:"6px 12px",fontSize:12}}>🗑️</button>
+                </div>}
+              </div>
+              {post.body&&<div style={{fontSize:14,color:"#c8d4e8",lineHeight:1.8,whiteSpace:"pre-wrap",borderTop:"1px solid #1e2535",paddingTop:14,marginTop:10}}>{post.body}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {(addOpen||editPost)&&<div style={{position:"fixed",inset:0,background:"#000b",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>{setAddOpen(false);setEditPost(null);}}>
+        <div style={{background:"#161b27",borderRadius:20,border:"1px solid #1e2535",padding:32,width:560,maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontSize:17,fontWeight:800,color:"#fff",marginBottom:20}}>{editPost?"✏️ Edit Post":"📰 New Newsletter Post"}</div>
+          <div style={{marginBottom:14}}><label style={s.label}>Title *</label><input style={s.input} placeholder="Post title…" value={form.title} onChange={e=>setForm(p=>({...p,title:e.target.value}))}/></div>
+          <div style={{marginBottom:14}}><label style={s.label}>Message / Body</label><textarea style={{...s.input,minHeight:140,resize:"vertical"}} placeholder="Write your update here…" value={form.body} onChange={e=>setForm(p=>({...p,body:e.target.value}))}/></div>
+          <div style={{marginBottom:20}}>
+            <label style={s.label}>Image / Screenshot (optional)</label>
+            <label style={{...s.btn("secondary"),cursor:"pointer",display:"inline-block",marginBottom:10}}>
+              📷 Upload Image
+              <input type="file" accept="image/*" onChange={handleImage} style={{display:"none"}}/>
+            </label>
+            {form.image&&<div style={{marginTop:10,position:"relative",display:"inline-block"}}>
+              <img src={form.image} alt="preview" style={{maxWidth:"100%",maxHeight:200,borderRadius:10,display:"block"}}/>
+              <button onClick={()=>setForm(p=>({...p,image:null}))} style={{position:"absolute",top:6,right:6,background:"#ef4444",border:"none",borderRadius:"50%",width:24,height:24,color:"#fff",fontSize:12,cursor:"pointer"}}>✕</button>
+            </div>}
+          </div>
+          <div style={{display:"flex",gap:10}}><button style={s.btn("secondary")} onClick={()=>{setAddOpen(false);setEditPost(null);}}>Cancel</button><button style={{...s.btn("primary"),background:"linear-gradient(135deg,#3b82f6,#8b5cf6)"}} onClick={handleSave}>Publish</button></div>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
 const trendData = [
   { day:"Mon", revenue:8000, deals:1, calls:18 },{ day:"Tue", revenue:12500, deals:2, calls:22 },
   { day:"Wed", revenue:7000, deals:1, calls:15 },{ day:"Thu", revenue:18000, deals:3, calls:28 },
@@ -686,6 +775,8 @@ export default function CRM() {
   const [performance, setPerformance] = useState({});
   const [agentStatuses, setAgentStatuses] = useState({});
   const [myStatus, setMyStatus] = useState("Online");
+  const [breakStart, setBreakStart] = useState(null);
+  const [breakElapsed, setBreakElapsed] = useState(0);
   const [clockedIn, setClockedIn] = useState(false);
   const [clockTime, setClockTime] = useState(null);
   const [leadModal, setLeadModal] = useState(null);
@@ -698,6 +789,28 @@ export default function CRM() {
   const [appLoading, setAppLoading] = useState(true);
 
   useEffect(() => { const t = setInterval(()=>setCurrentTime(new Date()),1000); return ()=>clearInterval(t); }, []);
+
+  // Break timer
+  useEffect(() => {
+    if (myStatus === "On Break" && breakStart) {
+      const t = setInterval(() => setBreakElapsed(Math.floor((Date.now() - breakStart) / 1000)), 1000);
+      return () => clearInterval(t);
+    } else if (myStatus !== "On Break") {
+      setBreakElapsed(0); setBreakStart(null);
+    }
+  }, [myStatus, breakStart]);
+
+  const handleSetStatus = (st) => {
+    setMyStatus(st);
+    if (st === "On Break") setBreakStart(Date.now());
+    else { setBreakStart(null); setBreakElapsed(0); }
+  };
+
+  const formatBreak = (secs) => {
+    const m = Math.floor(secs / 60).toString().padStart(2,"0");
+    const s2 = (secs % 60).toString().padStart(2,"0");
+    return `${m}:${s2}`;
+  };
 
   const refreshUsers = useCallback(async () => {
     const d = await db.get("users","order=id.asc&select=*");
@@ -750,7 +863,11 @@ export default function CRM() {
 
   const handleClockIn = async () => {
     const now = currentTime.toTimeString().slice(0,5);
-    const status = now>"08:15"?"Late":"Present";
+    // Schedule is 11PM (23:00) - 8AM. Late if after 23:15
+    const [h, m] = now.split(":").map(Number);
+    const mins = h * 60 + m;
+    // On-time window: 23:00 (1380) to 23:15 (1395). Before 23:00 is early (Present), after 23:15 is Late
+    const status = (mins >= 1380 && mins <= 1395) || mins < 480 ? "Present" : "Late";
     setClockedIn(true); setClockTime(now);
     await db.post("attendance",{user_id:currentUser.id,date:today,time_in:now,status});
     loadData();
@@ -799,13 +916,14 @@ export default function CRM() {
   const totalDeals = Object.values(performance).reduce((s,p)=>s+(p.deals||0),0);
   const statusDot = { Online:"#10b981","On Break":"#f59e0b",Offline:"#ef4444" };
 
-  const adminTabs = ["dashboard","overview","realtime","leads","agents","transfers","attendance","performance","coaching","automations","board","scripts","users","settings"];
-  const agentTabs = ["dashboard","my-leads","my-attendance","my-performance","transfers","coaching","board","scripts","settings"];
+  const adminTabs = ["dashboard","overview","realtime","leads","agents","transfers","attendance","performance","coaching","automations","board","scripts","newsletter","users","settings"];
+  const agentTabs = ["dashboard","my-leads","my-attendance","my-performance","transfers","coaching","board","scripts","newsletter","settings"];
   const tabs = isAdmin?adminTabs:agentTabs;
-  const tabLabels = { dashboard:"Dashboard",overview:"Agent Overview",realtime:"Live Monitor",leads:"Leads",agents:"Team",transfers:"Transfers",attendance:"Attendance",performance:"Performance",coaching:"Coaching",automations:"Automations",board:"Freedom Board",scripts:"Scripts Library",users:"User Management",settings:"My Profile","my-leads":"My Leads","my-attendance":"My Attendance","my-performance":"My Performance" };
-  const tabIcons = { dashboard:"📊",overview:"🪪",realtime:"🟢",leads:"🎯",agents:"👥",transfers:"🔄",attendance:"🕐",performance:"📈",coaching:"🎓",automations:"⚙️",board:"📌",scripts:"📋",users:"👤",settings:"⚙️","my-leads":"🎯","my-attendance":"🕐","my-performance":"📈" };
+  const tabLabels = { dashboard:"Dashboard",overview:"Agent Overview",realtime:"Live Monitor",leads:"Leads",agents:"Team",transfers:"Transfers",attendance:"Attendance",performance:"Performance",coaching:"Coaching",automations:"Automations",board:"Freedom Board",scripts:"Scripts Library",newsletter:"Newsletter",users:"User Management",settings:"My Profile","my-leads":"My Leads","my-attendance":"My Attendance","my-performance":"My Performance" };
+  const tabIcons = { dashboard:"📊",overview:"🪪",realtime:"🟢",leads:"🎯",agents:"👥",transfers:"🔄",attendance:"🕐",performance:"📈",coaching:"🎓",automations:"⚙️",board:"📌",scripts:"📋",newsletter:"📰",users:"👤",settings:"⚙️","my-leads":"🎯","my-attendance":"🕐","my-performance":"📈" };
 
   const renderContent = () => {
+    if(activeTab==="newsletter") return <Newsletter isAdmin={isAdmin} currentUser={currentUser}/>;
     if(activeTab==="board") return <FreedomBoard currentUser={currentUser} isAdmin={isAdmin}/>;
     if(activeTab==="scripts") return <ScriptsLibrary isAdmin={isAdmin} currentUser={currentUser}/>;
     if(activeTab==="transfers") return <TransferredLeads currentUser={currentUser} allUsers={allUsers} isAdmin={isAdmin} performance={performance} setPerformance={setPerformance}/>;
@@ -865,7 +983,7 @@ export default function CRM() {
       if(activeTab==="dashboard") return (
         <div>
           <div style={s.grid4}>
-            {[{l:"Total Revenue",v:`₱${totalRev.toLocaleString()}`,ch:"+12% this month",pos:true,i:"💰"},{l:"Deals Closed",v:totalDeals,ch:"+3 this week",pos:true,i:"🤝"},{l:"Active Leads",v:leads.filter(l=>l.status!=="Closed Lost").length,ch:`${leads.filter(l=>l.status==="New").length} new`,pos:true,i:"🎯"},{l:"Team Size",v:allUsers.length,ch:`${agents.length} agents`,pos:true,i:"👥"}].map((stat,i)=>(
+            {[{l:"Total Revenue",v:`$${totalRev.toLocaleString()}`,ch:"+12% this month",pos:true,i:"💰"},{l:"Successful Transfers",v:totalDeals,ch:"+3 this week",pos:true,i:"🔄"},{l:"Active Leads",v:leads.filter(l=>l.status!=="Closed Lost").length,ch:`${leads.filter(l=>l.status==="New").length} new`,pos:true,i:"🎯"},{l:"Team Size",v:allUsers.length,ch:`${agents.length} agents`,pos:true,i:"👥"}].map((stat,i)=>(
               <div key={i} style={s.statCard}><div style={{fontSize:22,marginBottom:8}}>{stat.i}</div><div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{stat.v}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:4}}>{stat.l}</div><div style={{fontSize:12,color:stat.pos?"#10b981":"#ef4444",marginTop:2}}>{stat.ch}</div></div>
             ))}
           </div>
@@ -884,8 +1002,8 @@ export default function CRM() {
                 <div key={agent.id} style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
                   <div style={{fontSize:13,color:"#4b5a78",width:16}}>#{i+1}</div>
                   <ProfilePic user={agent} size={32}/>
-                  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{agent.name}</div><div style={{fontSize:11,color:"#4b5a78"}}>₱{(performance[agent.id]?.revenue||0).toLocaleString()}</div></div>
-                  <div style={{fontSize:12,color:"#10b981",fontWeight:600}}>{performance[agent.id]?.deals||0} deals</div>
+                  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{agent.name}</div><div style={{fontSize:11,color:"#4b5a78"}}>${(performance[agent.id]?.revenue||0).toLocaleString()}</div></div>
+                  <div style={{fontSize:12,color:"#10b981",fontWeight:600}}>{performance[agent.id]?.deals||0} transfers</div>
                 </div>
               ))}
             </div>
@@ -942,7 +1060,7 @@ export default function CRM() {
 
       if(activeTab==="performance") return (
         <div style={s.card}><table style={s.table}>
-          <thead><tr>{["Agent","Calls","Deals","Revenue","Tasks","Target","Attainment"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["Agent","Calls","Transfers","Revenue","Tasks","Target","Attainment"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>{agents.map(agent=>{const perf=performance[agent.id]||{};const att=Math.round(((perf.deals||0)/(agent.target||40))*100);return(
             <tr key={agent.id}>
               <td style={s.td}><div style={{display:"flex",alignItems:"center",gap:10}}><ProfilePic user={agent} size={30}/><div><div style={{fontWeight:600,color:"#fff"}}>{agent.name}</div><div style={{fontSize:11,color:"#4b5a78"}}>{agent.department}</div></div></div></td>
@@ -956,7 +1074,7 @@ export default function CRM() {
       );
 
       if(activeTab==="automations") return (
-        <div>{[{icon:"📧",name:"Follow-up Reminder",desc:"Auto-remind agents when a lead hasn't been contacted in 3 days",status:"Active"},{icon:"⚠️",name:"Late Attendance Alert",desc:"Notify admin when an agent clocks in after 08:15",status:"Active"},{icon:"🏆",name:"Deal Won Celebration",desc:"Post to team channel when a deal is closed",status:"Active"},{icon:"📊",name:"Weekly Performance Report",desc:"Send performance summary every Monday 8AM",status:"Active"},{icon:"🔁",name:"Lead Reassignment",desc:"Auto-reassign leads if agent is absent 2+ days",status:"Inactive"}].map((r,i)=>(
+        <div>{[{icon:"📧",name:"Follow-up Reminder",desc:"Auto-remind agents when a lead hasn't been contacted in 3 days",status:"Active"},{icon:"⚠️",name:"Late Attendance Alert",desc:"Notify admin when an agent clocks in after 11:15 PM",status:"Active"},{icon:"🏆",name:"Transfer Success Celebration",desc:"Post to team channel when a transfer is marked successful",status:"Active"},{icon:"📊",name:"Weekly Performance Report",desc:"Send performance summary every Monday 8AM",status:"Active"},{icon:"🔁",name:"Lead Reassignment",desc:"Auto-reassign leads if agent is absent 2+ days",status:"Inactive"}].map((r,i)=>(
           <div key={i} style={{...s.card,display:"flex",alignItems:"center",gap:16}}><div style={{fontSize:28}}>{r.icon}</div><div style={{flex:1}}><div style={{fontWeight:700,color:"#fff",fontSize:14}}>{r.name}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:3}}>{r.desc}</div></div><span style={s.badge(r.status==="Active"?"#10b981":"#4b5a78")}>{r.status}</span></div>
         ))}</div>
       );
@@ -968,12 +1086,13 @@ export default function CRM() {
             <ProfilePic user={allUsers.find(u=>u.id===currentUser.id)||currentUser} size={56}/>
             <div style={{flex:1}}><div style={{fontSize:18,fontWeight:800,color:"#fff"}}>Welcome, {currentUser.name.split(" ")[0]}!</div><div style={{fontSize:13,color:"#4b5a78"}}>{currentTime.toLocaleDateString("en-PH",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div><div style={{fontSize:20,fontWeight:700,color:"#60a5fa",marginTop:4}}>{currentTime.toLocaleTimeString()}</div></div>
             <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["Online","On Break","Offline"].map(st=><button key={st} onClick={()=>setMyStatus(st)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${myStatus===st?statusDot[st]:"#1e2535"}`,background:myStatus===st?statusDot[st]+"22":"transparent",cursor:"pointer",fontSize:11,fontWeight:600,color:myStatus===st?statusDot[st]:"#4b5a78"}}>{st==="Online"?"🟢":st==="On Break"?"🟡":"🔴"} {st}</button>)}</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["Online","On Break","Offline"].map(st=><button key={st} onClick={()=>handleSetStatus(st)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${myStatus===st?statusDot[st]:"#1e2535"}`,background:myStatus===st?statusDot[st]+"22":"transparent",cursor:"pointer",fontSize:11,fontWeight:600,color:myStatus===st?statusDot[st]:"#4b5a78"}}>{st==="Online"?"🟢":st==="On Break"?"🟡":"🔴"} {st}</button>)}</div>
+              {myStatus==="On Break"&&<div style={{background:"#f59e0b22",border:"1px solid #f59e0b",borderRadius:10,padding:"5px 14px",fontSize:13,fontWeight:700,color:"#f59e0b"}}>⏱️ Break: {formatBreak(breakElapsed)}</div>}
               <div>{!clockedIn?<button style={{...s.btn("success"),background:"#10b981"}} onClick={handleClockIn}>🟢 Clock In</button>:<button style={s.btn("danger")} onClick={handleClockOut}>🔴 Clock Out</button>}</div>
             </div>
           </div>
           {clockedIn&&<div style={{...s.card,background:"#0d2a1a",borderColor:"#10b981",marginBottom:20}}><div style={{fontSize:13,color:"#10b981"}}>✅ Clocked in at <strong>{clockTime}</strong>. Have a great day!</div></div>}
-          <div style={s.grid4}>{[{l:"My Deals",v:myPerf.deals||0,i:"🤝"},{l:"Revenue",v:`₱${(myPerf.revenue||0).toLocaleString()}`,i:"💰"},{l:"Calls",v:myPerf.calls||0,i:"📞"},{l:"My Leads",v:myLeads.length,i:"🎯"}].map((stat,i)=><div key={i} style={s.statCard}><div style={{fontSize:22,marginBottom:6}}>{stat.i}</div><div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{stat.v}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:4}}>{stat.l}</div></div>)}</div>
+          <div style={s.grid4}>{[{l:"My Transfers",v:myPerf.deals||0,i:"🔄"},{l:"Revenue",v:`$${(myPerf.revenue||0).toLocaleString()}`,i:"💰"},{l:"Calls",v:myPerf.calls||0,i:"📞"},{l:"My Leads",v:myLeads.length,i:"🎯"}].map((stat,i)=><div key={i} style={s.statCard}><div style={{fontSize:22,marginBottom:6}}>{stat.i}</div><div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{stat.v}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:4}}>{stat.l}</div></div>)}</div>
           <div style={s.card}><div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:14}}>My Leads</div>
             <table style={s.table}><thead><tr>{["Company","Status","Value","Notes"].map(h=><th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>{myLeads.map(lead=><tr key={lead.id}><td style={s.td}><span style={{fontWeight:600,color:"#fff"}}>{lead.name}</span></td><td style={s.td}><span style={s.badge(statusColors[lead.status]||"#4b5a78")}>{lead.status}</span></td><td style={s.td}><span style={{color:"#10b981",fontWeight:600}}>₱{(lead.value||0).toLocaleString()}</span></td><td style={s.td}>{lead.notes}</td></tr>)}</tbody>
@@ -995,7 +1114,7 @@ export default function CRM() {
       );
       if(activeTab==="my-performance") {
         const att=Math.round(((myPerf.deals||0)/(currentUser.target||40))*100);
-        return <div><div style={s.grid4}>{[{l:"Deals",v:myPerf.deals||0,i:"🤝"},{l:"Revenue",v:`₱${(myPerf.revenue||0).toLocaleString()}`,i:"💰"},{l:"Calls",v:myPerf.calls||0,i:"📞"},{l:"Tasks",v:myPerf.tasks||0,i:"✅"}].map((stat,i)=><div key={i} style={s.statCard}><div style={{fontSize:22,marginBottom:6}}>{stat.i}</div><div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{stat.v}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:4}}>{stat.l}</div></div>)}</div>
+        return <div><div style={s.grid4}>{[{l:"Transfers",v:myPerf.deals||0,i:"🔄"},{l:"Revenue",v:`$${(myPerf.revenue||0).toLocaleString()}`,i:"💰"},{l:"Calls",v:myPerf.calls||0,i:"📞"},{l:"Tasks",v:myPerf.tasks||0,i:"✅"}].map((stat,i)=><div key={i} style={s.statCard}><div style={{fontSize:22,marginBottom:6}}>{stat.i}</div><div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{stat.v}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:4}}>{stat.l}</div></div>)}</div>
           <div style={s.card}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:14,fontWeight:700,color:"#fff"}}>Target Attainment</span><span style={{fontSize:20,fontWeight:800,color:att>=100?"#10b981":"#f59e0b"}}>{att}%</span></div><div style={{height:12,background:"#1e2535",borderRadius:99}}><div style={{height:"100%",width:`${Math.min(att,100)}%`,background:att>=100?"#10b981":att>=70?"#f59e0b":"#ef4444",borderRadius:99}}/></div><div style={{fontSize:12,color:"#4b5a78",marginTop:6}}>{myPerf.deals||0} of {currentUser.target||40} deals</div></div></div>;
       }
     }
