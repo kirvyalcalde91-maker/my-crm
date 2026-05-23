@@ -845,14 +845,14 @@ export default function CRM() {
   useEffect(() => {
     if(!currentUser)return;
     const broadcast = async () => {
-      await db.upsert("agent_statuses",{user_id:currentUser.id,status:myStatus,name:currentUser.name,avatar:currentUser.avatar,updated_at:new Date().toISOString()},"user_id");
+      await db.upsert("agent_statuses",{user_id:currentUser.id,status:myStatus,name:currentUser.name,avatar:currentUser.avatar,updated_at:new Date().toISOString(),break_started:myStatus==="On Break"&&breakStart?new Date(breakStart).toISOString():null},"user_id");
       const d = await db.get("agent_statuses","select=*");
       const m = {}; (d||[]).forEach(s=>{ m[s.user_id]=s; }); setAgentStatuses(m);
     };
     broadcast();
     const t = setInterval(broadcast,10000);
     return ()=>clearInterval(t);
-  }, [currentUser, myStatus]);
+  }, [currentUser, myStatus, breakStart]);
 
   const handleLogin = (user) => { setCurrentUser(user); setMyStatus("Online"); setActiveTab("dashboard"); };
 
@@ -953,6 +953,11 @@ export default function CRM() {
               const status=isRecent?st.status:"Offline";
               const todayAtt=(attendance[agent.id]||[]).find(r=>r.date===today);
               const perf=performance[agent.id]||{};
+              let breakDisplay=null;
+              if(status==="On Break"&&st?.break_started){
+                const bsecs=Math.floor((now-new Date(st.break_started).getTime())/1000);
+                breakDisplay=`${Math.floor(bsecs/60).toString().padStart(2,"0")}:${(bsecs%60).toString().padStart(2,"0")}`;
+              }
               return (
                 <div key={agent.id} style={{ background:"#161b27",borderRadius:14,border:`1px solid ${status==="Online"?"#10b98144":status==="On Break"?"#f59e0b44":"#1e2535"}`,padding:18 }}>
                   <div style={{ display:"flex",gap:12,alignItems:"center",marginBottom:12 }}>
@@ -963,11 +968,17 @@ export default function CRM() {
                     <div style={{ flex:1 }}><div style={{ fontWeight:700,color:"#fff",fontSize:14 }}>{agent.name}</div><div style={{ fontSize:11,color:"#4b5a78" }}>{agent.department}</div></div>
                     <span style={s.badge(statusDot[status]||"#ef4444")}>{status}</span>
                   </div>
+                  {status==="On Break"&&breakDisplay&&(
+                    <div style={{background:"#f59e0b22",border:"1px solid #f59e0b66",borderRadius:8,padding:"7px 12px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:12,color:"#f59e0b",fontWeight:600}}>⏱️ Break duration</span>
+                      <span style={{fontSize:16,fontWeight:800,color:"#f59e0b",fontFamily:"monospace"}}>{breakDisplay}</span>
+                    </div>
+                  )}
                   <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
                     {[
                       {l:"Attendance",v:todayAtt?.status||"Not in",c:todayAtt?attColors[todayAtt.status]:"#ef4444"},
                       {l:"Clock In",v:todayAtt?.time_in||"—",c:"#c8d4e8"},
-                      {l:"Deals",v:perf.deals||0,c:"#10b981"},
+                      {l:"Transfers",v:perf.deals||0,c:"#10b981"},
                       {l:"Last Active",v:isRecent?"Active now":"Inactive",c:isRecent?"#10b981":"#4b5a78"},
                     ].map(m=><div key={m.l} style={{ background:"#0f1117",borderRadius:8,padding:"8px 10px" }}><div style={{ fontSize:10,color:"#4b5a78" }}>{m.l}</div><div style={{ fontSize:12,fontWeight:700,color:m.c,marginTop:2 }}>{m.v}</div></div>)}
                   </div>
@@ -983,31 +994,41 @@ export default function CRM() {
       if(activeTab==="dashboard") return (
         <div>
           <div style={s.grid4}>
-            {[{l:"Total Revenue",v:`$${totalRev.toLocaleString()}`,ch:"+12% this month",pos:true,i:"💰"},{l:"Successful Transfers",v:totalDeals,ch:"+3 this week",pos:true,i:"🔄"},{l:"Active Leads",v:leads.filter(l=>l.status!=="Closed Lost").length,ch:`${leads.filter(l=>l.status==="New").length} new`,pos:true,i:"🎯"},{l:"Team Size",v:allUsers.length,ch:`${agents.length} agents`,pos:true,i:"👥"}].map((stat,i)=>(
-              <div key={i} style={s.statCard}><div style={{fontSize:22,marginBottom:8}}>{stat.i}</div><div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{stat.v}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:4}}>{stat.l}</div><div style={{fontSize:12,color:stat.pos?"#10b981":"#ef4444",marginTop:2}}>{stat.ch}</div></div>
+            {[
+              {l:"Successful Transfers",v:totalDeals,ch:"Team total this month",pos:true,i:"🔄"},
+              {l:"Active Leads",v:leads.filter(l=>l.status!=="Closed Lost").length,ch:`${leads.filter(l=>l.status==="New").length} new`,pos:true,i:"🎯"},
+              {l:"Team Present Today",v:agents.filter(a=>(attendance[a.id]||[]).find(r=>r.date===today&&(r.status==="Present"||r.status==="Late"))).length,ch:`of ${agents.length} agents`,pos:true,i:"🕐"},
+              {l:"Team Size",v:allUsers.length,ch:`${agents.length} agents`,pos:true,i:"👥"},
+            ].map((stat,i)=>(
+              <div key={i} style={s.statCard}><div style={{fontSize:22,marginBottom:8}}>{stat.i}</div><div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{stat.v}</div><div style={{fontSize:12,color:"#4b5a78",marginTop:4}}>{stat.l}</div><div style={{fontSize:12,color:"#10b981",marginTop:2}}>{stat.ch}</div></div>
             ))}
           </div>
-          <div style={s.grid2}>
-            <div style={s.card}><div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>📈 Revenue Trend</div><div style={{fontSize:12,color:"#4b5a78",marginBottom:10}}>This week</div><LineChart data={trendData} color="#3b82f6" valueKey="revenue"/><div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>{trendData.map((d,i)=><span key={i} style={{fontSize:9,color:"#4b5a78"}}>{d.day}</span>)}</div></div>
-            <div style={s.card}><div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>📊 Revenue by Agent</div><div style={{fontSize:12,color:"#4b5a78",marginBottom:10}}>Monthly</div><BarChart agents={agents} performance={performance}/></div>
+
+          <div style={s.card}>
+            <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:4}}>📈 Team Transfer Trend</div>
+            <div style={{fontSize:12,color:"#4b5a78",marginBottom:12}}>Total successful transfers this week</div>
+            <LineChart data={trendData} color="#10b981" valueKey="deals"/>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>{trendData.map((d,i)=><span key={i} style={{fontSize:10,color:"#4b5a78",flex:1,textAlign:"center"}}>{d.day}</span>)}</div>
           </div>
+
           <div style={s.grid2}>
             <div style={s.card}>
               <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:16}}>Lead Pipeline</div>
               {["New","Follow-up","Negotiation","Closed Won"].map(status=>{const count=leads.filter(l=>l.status===status).length;const pct=leads.length?Math.round((count/leads.length)*100):0;return<div key={status} style={{marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:"#8899b4"}}>{status}</span><span style={{fontSize:12,color:"#fff",fontWeight:600}}>{count}</span></div><div style={{height:6,background:"#1e2535",borderRadius:99}}><div style={{height:"100%",width:`${pct}%`,background:statusColors[status],borderRadius:99}}/></div></div>;})}
             </div>
             <div style={s.card}>
-              <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:16}}>Top Performers</div>
-              {[...agents].sort((a,b)=>(performance[b.id]?.revenue||0)-(performance[a.id]?.revenue||0)).map((agent,i)=>(
+              <div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:16}}>🔄 Top Performers</div>
+              {[...agents].sort((a,b)=>(performance[b.id]?.deals||0)-(performance[a.id]?.deals||0)).map((agent,i)=>(
                 <div key={agent.id} style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
                   <div style={{fontSize:13,color:"#4b5a78",width:16}}>#{i+1}</div>
                   <ProfilePic user={agent} size={32}/>
-                  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{agent.name}</div><div style={{fontSize:11,color:"#4b5a78"}}>${(performance[agent.id]?.revenue||0).toLocaleString()}</div></div>
+                  <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:"#fff"}}>{agent.name}</div><div style={{fontSize:11,color:"#4b5a78"}}>{agent.department}</div></div>
                   <div style={{fontSize:12,color:"#10b981",fontWeight:600}}>{performance[agent.id]?.deals||0} transfers</div>
                 </div>
               ))}
             </div>
           </div>
+
           <div style={s.card}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>🤖 AI Team Insight</div><button style={s.btn("secondary")} onClick={getAiInsight} disabled={aiLoading}>{aiLoading?"Analyzing...":"Generate Insight"}</button></div>
             {aiInsight?<div style={{fontSize:13,color:"#c8d4e8",lineHeight:1.8,background:"#0f1117",borderRadius:10,padding:"14px 18px"}}>{aiInsight}</div>:<div style={{fontSize:13,color:"#4b5a78"}}>Click "Generate Insight" for AI-powered analysis.</div>}
