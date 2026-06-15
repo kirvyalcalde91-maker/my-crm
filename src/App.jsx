@@ -861,6 +861,7 @@ export default function CRM(){
   };
 
   const renderContent=()=>{
+    const statusDot={Online:"#10b981","On Break":"#f59e0b",Offline:"#ef4444"};
     // Campaign overview tabs
     if(activeTab.startsWith("camp_")){
       const campId=parseInt(activeTab.replace("camp_",""));
@@ -879,6 +880,7 @@ export default function CRM(){
 
     if(activeTab==="realtime"){
       const now=Date.now();
+      const statusDot={Online:"#10b981","On Break":"#f59e0b",Offline:"#ef4444"};
       return(
         <div>
           <div style={{fontSize:22,fontWeight:800,color:"#fff",marginBottom:4}}>🟢 Live Monitor</div>
@@ -936,8 +938,8 @@ export default function CRM(){
               const cAgents=agents.filter(a=>a.campaign_id===camp.id);
               const cTransfers=cAgents.reduce((s,a)=>(performance[a.id]?.deals||0)+s,0);
               const presentToday=cAgents.filter(a=>(attendance[a.id]||[]).find(r=>r.date===today&&(r.status==="Present"||r.status==="Late"))).length;
-              const onlineNow=cAgents.filter(a=>{const st=agentStatuses[a.id];return st&&st.status!=="Offline"&&(now-new Date(st.updated_at).getTime())<30000;}).length;
-              const now=Date.now();
+              const nowMs=Date.now();
+              const onlineNow=cAgents.filter(a=>{const st=agentStatuses[a.id];return st&&st.status!=="Offline"&&(nowMs-new Date(st.updated_at).getTime())<30000;}).length;
               return(
                 <div key={camp.id} onClick={()=>setActiveTab(`camp_${camp.id}`)} style={{background:"#161b27",borderRadius:14,border:`2px solid ${color}44`,padding:18,cursor:"pointer"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><div style={{width:10,height:10,borderRadius:"50%",background:color}}/><div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{camp.name}</div></div>
