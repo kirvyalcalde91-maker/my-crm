@@ -778,12 +778,12 @@ export default function CRM(){
       db.get("performance","select=*"),
       db.get("agent_statuses","select=*"),
     ]);
-    setCampaigns(camps||[]);
-    setAllUsers(usersData||[]);
-    setLeads(leadsData||[]);
-    const attMap={};(attData||[]).forEach(r=>{if(!attMap[r.user_id])attMap[r.user_id]=[];attMap[r.user_id].push(r);});setAttendance(attMap);
-    const perfMap={};(perfData||[]).forEach(p=>{perfMap[p.user_id]=p;});setPerformance(perfMap);
-    const statusMap={};(statusData||[]).forEach(s=>{statusMap[s.user_id]=s;});setAgentStatuses(statusMap);
+    setCampaigns(Array.isArray(camps)?camps:[]);
+    setAllUsers(Array.isArray(usersData)?usersData:[]);
+    setLeads(Array.isArray(leadsData)?leadsData:[]);
+    const attMap={};(Array.isArray(attData)?attData:[]).forEach(r=>{if(!attMap[r.user_id])attMap[r.user_id]=[];attMap[r.user_id].push(r);});setAttendance(attMap);
+    const perfMap={};(Array.isArray(perfData)?perfData:[]).forEach(p=>{perfMap[p.user_id]=p;});setPerformance(perfMap);
+    const statusMap={};(Array.isArray(statusData)?statusData:[]).forEach(s=>{statusMap[s.user_id]=s;});setAgentStatuses(statusMap);
     setAppLoading(false);
   },[]);
 
@@ -793,7 +793,7 @@ export default function CRM(){
     if(!currentUser)return;
     const broadcast=async()=>{
       await db.upsert("agent_statuses",{user_id:currentUser.id,status:myStatus,name:currentUser.name,avatar:currentUser.avatar,updated_at:new Date().toISOString(),break_started:myStatus==="On Break"&&breakStart?new Date(breakStart).toISOString():null},"user_id");
-      const d=await db.get("agent_statuses","select=*");const m={};(d||[]).forEach(s=>{m[s.user_id]=s;});setAgentStatuses(m);
+      const d=await db.get("agent_statuses","select=*");const m={};(Array.isArray(d)?d:[]).forEach(s=>{m[s.user_id]=s;});setAgentStatuses(m);
     };
     broadcast();const t=setInterval(broadcast,10000);return()=>clearInterval(t);
   },[currentUser,myStatus,breakStart]);
